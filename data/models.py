@@ -78,16 +78,18 @@ class Solution(models.Model):
         return '%s (%s: %d)' %(self.answer, self.method, self.position)
 
 class Word(models.Model):
-    name = models.CharField(max_length=100)
+    base_form = models.CharField(max_length=100)
+    changed_form = models.CharField(max_length=100)
     is_stop_word = models.BooleanField(default=False)
 
     def __str__(self):
-        return self.name
+        return '%s (%s)' % (self.changed_form, self.base_form)
 
 class Occurrence(models.Model):
     article = models.ForeignKey(Article)
     word = models.ForeignKey(Word)
-    positions = ListField()
+    positions = models.TextField()
+    is_title = models.BooleanField(default=False)
 
     def __str__(self):
         return '%s - %s: %s' % (self.word, self.article, self.positions)

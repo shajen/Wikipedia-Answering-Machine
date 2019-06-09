@@ -23,7 +23,7 @@ class SolutionAdmin(admin.ModelAdmin):
 
 class WordAdmin(admin.ModelAdmin):
 	list_per_page = 100
-	list_display = ('id', 'name', 'is_stop_word')
+	list_display = ('id', 'base_form', 'changed_form', 'is_stop_word')
 
 class OccurrenceAdmin(admin.ModelAdmin):
 	list_per_page = 100
