@@ -47,26 +47,47 @@ class Article(models.Model):
         symmetrical=False
     )
 
+    def __str__(self):
+        return self.title
+
 class Method(models.Model):
     name = models.CharField(max_length=1024)
+
+    def __str__(self):
+        return self.name
 
 class Question(models.Model):
     name = models.CharField(max_length=1024)
 
+    def __str__(self):
+        return self.name
+
 class Answer(models.Model):
     article = models.ForeignKey(Article)
     question = models.ForeignKey(Question)
+
+    def __str__(self):
+        return '%s, %s' % (self.article, self.question)
 
 class Solution(models.Model):
     answer = models.ForeignKey(Answer)
     method = models.ForeignKey(Article)
     position = models.IntegerField()
 
+    def __str__(self):
+        return '%s (%s: %d)' %(self.answer, self.method, self.position)
+
 class Word(models.Model):
     name = models.CharField(max_length=100)
     is_stop_word = models.BooleanField(default=False)
+
+    def __str__(self):
+        return self.name
 
 class Occurrence(models.Model):
     article = models.ForeignKey(Article)
     word = models.ForeignKey(Word)
     positions = ListField()
+
+    def __str__(self):
+        return '%s - %s: %s' % (self.word, self.article, self.positions)
