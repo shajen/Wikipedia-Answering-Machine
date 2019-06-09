@@ -40,7 +40,7 @@ class ListField(models.TextField):
         return self.get_prep_value(value)
 
 class Article(models.Model):
-    title = models.CharField(max_length=1024)
+    title = models.CharField(max_length=255, unique=True)
     links = models.ManyToManyField(
         to='self',
         related_name='links_relationship',
@@ -51,13 +51,13 @@ class Article(models.Model):
         return self.title
 
 class Method(models.Model):
-    name = models.CharField(max_length=1024)
+    name = models.CharField(max_length=255, unique=True)
 
     def __str__(self):
         return self.name
 
 class Question(models.Model):
-    name = models.CharField(max_length=1024)
+    name = models.CharField(max_length=255, unique=True)
 
     def __str__(self):
         return self.name
@@ -69,6 +69,9 @@ class Answer(models.Model):
     def __str__(self):
         return '%s, %s' % (self.article, self.question)
 
+    class Meta:
+        unique_together = ('article', 'question')
+
 class Solution(models.Model):
     answer = models.ForeignKey(Answer)
     method = models.ForeignKey(Article)
@@ -77,9 +80,12 @@ class Solution(models.Model):
     def __str__(self):
         return '%s (%s: %d)' %(self.answer, self.method, self.position)
 
+    class Meta:
+        unique_together = ('answer', 'method')
+
 class Word(models.Model):
     base_form = models.CharField(max_length=100)
-    changed_form = models.CharField(max_length=100)
+    changed_form = models.CharField(max_length=100, unique=True)
     is_stop_word = models.BooleanField(default=False)
 
     def __str__(self):
@@ -93,3 +99,6 @@ class Occurrence(models.Model):
 
     def __str__(self):
         return '%s - %s: %s' % (self.word, self.article, self.positions)
+
+    class Meta:
+        unique_together = ('article', 'word', 'is_title')
