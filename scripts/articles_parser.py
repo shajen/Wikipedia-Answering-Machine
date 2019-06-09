@@ -87,4 +87,7 @@ class ArticlesParser():
 			if all(baseWords[i][:3] == changedWords[i][:3] for i in range(len(baseWords))):
 				for i in range(len(baseWords)):
 					if baseWords[i] != changedWords[i]:
-						Word.objects.get_or_create(base_form=baseWords[i], changed_form=changedWords[i])
+						try:
+							Word.objects.get_or_create(base_form=baseWords[i], changed_form=changedWords[i])
+						except:
+							pass
