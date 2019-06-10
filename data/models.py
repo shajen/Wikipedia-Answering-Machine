@@ -46,18 +46,21 @@ class Article(models.Model):
         related_name='links_relationship',
         symmetrical=False
     )
+    added_date = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return self.title
 
 class Method(models.Model):
     name = models.CharField(max_length=255, unique=True)
+    added_date = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return self.name
 
 class Question(models.Model):
     name = models.CharField(max_length=255, unique=True)
+    added_date = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return self.name
@@ -65,6 +68,7 @@ class Question(models.Model):
 class Answer(models.Model):
     article = models.ForeignKey(Article)
     question = models.ForeignKey(Question)
+    added_date = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return '%s, %s' % (self.article, self.question)
@@ -76,6 +80,7 @@ class Solution(models.Model):
     answer = models.ForeignKey(Answer)
     method = models.ForeignKey(Article)
     position = models.IntegerField()
+    added_date = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return '%s (%s: %d)' %(self.answer, self.method, self.position)
@@ -87,6 +92,7 @@ class Word(models.Model):
     base_form = models.CharField(max_length=100)
     changed_form = models.CharField(max_length=100, unique=True)
     is_stop_word = models.BooleanField(default=False)
+    added_date = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return '%s (%s)' % (self.changed_form, self.base_form)
@@ -96,7 +102,8 @@ class Occurrence(models.Model):
     word = models.ForeignKey(Word)
     positions = models.TextField()
     is_title = models.BooleanField(default=False)
-
+    added_date = models.DateTimeField(auto_now_add=True)
+    
     def __str__(self):
         return '%s - %s: %s' % (self.word, self.article, self.positions)
 
