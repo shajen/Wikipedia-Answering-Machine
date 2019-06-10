@@ -37,7 +37,7 @@ def preparse_polimorfologik(articlesParser, path):
 
 def parse_stop_words(path):
     for line in open(path, 'r'):
-        Word.objects.filter(base_form=line.strip()).update(is_stop_word=True)
+        Word.objects.filter(base_form__iexact=line.strip()).update(is_stop_word=True)
 
 def parse_json(articlesParser, path):
     ignoredSections = ['bibliografia', 'linki zewnętrzne', 'zobacz też', 'przypisy', 'uwagi']
@@ -95,5 +95,5 @@ def run(*args):
     articlesParser = articles_parser.ArticlesParser()
     preparse_polimorfologik(articlesParser, args.polimorfologik_file)
     preparse_json(articlesParser, args.json_articles_file)
-    parse_stop_words(args.stop_words_file)
     parse_json(articlesParser, args.json_articles_file)
+    parse_stop_words(args.stop_words_file)

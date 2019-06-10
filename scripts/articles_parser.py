@@ -48,10 +48,10 @@ class ArticlesParser():
 				pass
 
 	def parseArticle(self, title, text, links):
-		article = Article.objects.filter(title__icontains=title)[0]
+		article = Article.objects.filter(title__iexact=title)[0]
 		for link in links:
 			try:
-				linkedArticle = Article.objects.filter(title__icontains=link)[0]
+				linkedArticle = Article.objects.filter(title__iexact=link)[0]
 				article.links.add(linkedArticle)
 			except:
 				pass
