@@ -100,10 +100,10 @@ class Word(models.Model):
 class Occurrence(models.Model):
     article = models.ForeignKey(Article)
     word = models.ForeignKey(Word)
-    positions = models.TextField()
+    positions = models.CharField(max_length=2048)
+    positions_count = models.PositiveSmallIntegerField()
     is_title = models.BooleanField(default=False)
-    added_date = models.DateTimeField(auto_now_add=True)
-    
+
     def __str__(self):
         return '%s - %s: %s' % (self.word, self.article, self.positions)
 

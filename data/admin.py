@@ -27,7 +27,7 @@ class WordAdmin(admin.ModelAdmin):
 
 class OccurrenceAdmin(admin.ModelAdmin):
 	list_per_page = 100
-	list_display = ('id', 'word', 'article', 'positions')
+	list_display = ('id', 'word', 'article', 'positions', 'positions_count')
 
 admin.site.register(Article, ArticleAdmin)
 admin.site.register(Method, MethodAdmin)

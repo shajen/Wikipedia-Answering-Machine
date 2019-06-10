@@ -76,7 +76,7 @@ class ArticlesParser():
 
 		for word_id in positions:
 			p = ','.join(str(s) for s in positions[word_id])
-			Occurrence.objects.create(article=article, word_id=word_id, positions=p, is_title=isTitle)
+			Occurrence.objects.create(article=article, word_id=word_id, positions=p, positions_count=len(positions[word_id]), is_title=isTitle)
 
 	def addBaseForms(self, baseText, changedText):
 		baseText = re.sub('(\(.+?\))', ' ', baseText.lower())
