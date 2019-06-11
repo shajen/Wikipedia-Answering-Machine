@@ -7,7 +7,7 @@ import re
 
 class ArticlesParser():
 	def __init__ (self, batch_size):
-		self.batch_size=batch_size
+		self.batch_size = batch_size
 
 	def removeObjects(self, text, objects):
 		for t in objects:

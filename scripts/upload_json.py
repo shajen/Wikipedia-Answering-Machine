@@ -7,14 +7,14 @@ import logging
 import os
 import shlex
 import sys
-from functools import reduce
+from functools import reduce, partial
 
 sys.path.append(os.path.dirname(__file__))
 
 import articles_parser
 import logger
 
-def preparse_json(batch_size, line):
+def preparse_article_callback(batch_size, line):
     try:
         articlesParser = articles_parser.ArticlesParser(batch_size)
         words = []
@@ -28,19 +28,44 @@ def preparse_json(batch_size, line):
         Word.objects.bulk_create(words, ignore_conflicts=True, batch_size=batch_size)
         return Article(title=data['title'].strip())
     except Exception as e:
-        logging.warning('exception durig preparse json line:')
+        logging.warning('exception durig preparse_article_callback:')
         logging.warning(e)
         logging.warning(line)
 
-def preparse_polimorfologik(line):
-    articlesParser = articles_parser.ArticlesParser(0)
-    data = line.strip().split('\t')
-    return Word(base_form=data[1], changed_form=data[0])
+def preparse_articles(batch_size, file, pool):
+    logging.info('preparse articles start')
+    articles = pool.map(partial(preparse_article_callback, batch_size), list(open(file, 'r')))
+    articles = [x for x in articles if x is not None]
+    logging.info('inserting %d rows' % len(articles))
+    Article.objects.bulk_create(articles, ignore_conflicts=True, batch_size=batch_size)
+    logging.info('finish')
 
-def parse_stop_words(line):
-    Word.objects.filter(base_form__iexact=line.strip()).update(is_stop_word=True)
+def preparse_polimorfologik(batch_size, file):
+    logging.info('preparse polimorfologik start')
+    words = []
+    articlesParser = articles_parser.ArticlesParser(batch_size)
+    for line in list(open(file, 'r')):
+        data = line.strip().split('\t')
+        words.append(Word(base_form=data[1], changed_form=data[0]))
+        if len(words) >= batch_size:
+            logging.debug('inserting %d rows' % len(words))
+            try:
+                Word.objects.bulk_create(words, ignore_conflicts=True)
+                logging.debug('finish')
+            except Exception as e:
+                logging.error('exeption during insert words:')
+                logging.error(e)
+                logging.error(words)
+            words = []
+    logging.info('finish')
 
-def parse_json(batch_size, line):
+def parse_stop_words(file):
+    logging.info('parse stop words start')
+    stop_words = [line.strip().lower() for line in open(file, 'r')]
+    Word.objects.filter(base_form__in=stop_words).update(is_stop_word=True)
+    logging.info('finish')
+
+def parse_articles_callback(batch_size, line):
     articlesParser = articles_parser.ArticlesParser(batch_size)
     ignoredSections = ['bibliografia', 'linki zewnętrzne', 'zobacz też', 'przypisy', 'uwagi']
     try:
@@ -49,7 +74,7 @@ def parse_json(batch_size, line):
         text = ''
         links = []
 
-        logging.info('title: %s' % title)
+        logging.debug('title: %s' % title)
         logging.debug('sections:')
         for i in range(len(data['section_titles'])):
             sectionName = data['section_titles'][i]
@@ -66,9 +91,14 @@ def parse_json(batch_size, line):
         articlesParser.parseArticle(title, text, links)
         # print(json.dumps(data, indent=4, sort_keys=True))
     except Exception as e:
-        logging.error('exception durig parse json line:')
+        logging.error('exception durig parse_articles_callback:')
         logging.error(e)
         logging.error(line)
+
+def parse_articles(batch_size, file, pool):
+    logging.info('parse articles start')
+    pool.map(partial(parse_articles_callback, batch_size), list(open(file, 'r')))
+    logging.info('parse stop words start')
 
 def run(*args):
     try:
@@ -82,27 +112,23 @@ def run(*args):
     parser.add_argument("-t", "--threads", help="threads", type=int, default=1, choices=range(1, 33), metavar="int")
     parser.add_argument("-b", "--batch_size", help="batch_size", type=int, default=10000, metavar="int")
     parser.add_argument('-v', '--verbose', action='count', default=0)
-
     args = parser.parse_args(args)
 
     logger.configLogger(args.verbose)
-    pool = multiprocess.Pool(args.threads)
+    logging.info('start')
+    logging.info('threads: %d' % args.threads)
+    logging.info('batch size: %d' % args.batch_size)
 
     Solution.objects.all().delete()
     Method.objects.all().delete()
     Answer.objects.all().delete()
     Question.objects.all().delete()
-
     Occurrence.objects.all().delete()
     Word.objects.all().delete()
     Article.objects.all().delete()
 
-    words = pool.map(preparse_polimorfologik, list(open(args.polimorfologik_file, 'r')))
-    Word.objects.bulk_create(words, ignore_conflicts=True, batch_size=args.batch_size)
-
-    articles = pool.map(partial(preparse_json, args.batch_size), list(open(args.json_articles_file, 'r')))
-    articles = [x for x in articles if x is not None]
-    Article.objects.bulk_create(articles, ignore_conflicts=True, batch_size=args.batch_size)
-
-    pool.map(partial(parse_json, args.batch_size), list(open(args.json_articles_file, 'r')))
-    pool.map(parse_stop_words, list(open(args.stop_words_file, 'r')))
+    pool = multiprocess.Pool(args.threads)
+    preparse_polimorfologik(args.batch_size, args.polimorfologik_file)
+    preparse_articles(args.batch_size, args.json_articles_file, pool)
+    parse_articles(args.batch_size, args.json_articles_file, pool)
+    parse_stop_words(args.stop_words_file)
