@@ -66,8 +66,8 @@ class Question(models.Model):
         return self.name
 
 class Answer(models.Model):
-    article = models.ForeignKey(Article)
-    question = models.ForeignKey(Question)
+    article = models.ForeignKey(Article, on_delete=models.CASCADE)
+    question = models.ForeignKey(Question, on_delete=models.CASCADE)
     added_date = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -77,8 +77,8 @@ class Answer(models.Model):
         unique_together = ('article', 'question')
 
 class Solution(models.Model):
-    answer = models.ForeignKey(Answer)
-    method = models.ForeignKey(Article)
+    answer = models.ForeignKey(Answer, on_delete=models.CASCADE)
+    method = models.ForeignKey(Article, on_delete=models.CASCADE)
     position = models.IntegerField()
     added_date = models.DateTimeField(auto_now_add=True)
 
@@ -98,8 +98,8 @@ class Word(models.Model):
         return '%s (%s)' % (self.changed_form, self.base_form)
 
 class Occurrence(models.Model):
-    article = models.ForeignKey(Article)
-    word = models.ForeignKey(Word)
+    article = models.ForeignKey(Article, on_delete=models.CASCADE)
+    word = models.ForeignKey(Word, on_delete=models.CASCADE)
     positions = models.CharField(max_length=2048)
     positions_count = models.PositiveSmallIntegerField()
     is_title = models.BooleanField(default=False)
