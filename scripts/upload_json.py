@@ -25,18 +25,26 @@ def preparse_article_callback(batch_size, line):
             logging.debug('%s - %s' % (baseText, data['interlinks'][baseText]))
             words.extend(articlesParser.addBaseForms(baseText, data['interlinks'][baseText]))
 
-        Word.objects.bulk_create(words, ignore_conflicts=True, batch_size=batch_size)
-        return Article(title=data['title'].strip())
+        return (Article(title=data['title'].strip()), words)
     except Exception as e:
         logging.warning('exception durig preparse_article_callback:')
         logging.warning(e)
         logging.warning(line)
+        return (None, [])
 
 def preparse_articles(batch_size, file, pool):
     logging.info('preparse articles start')
-    articles = pool.map(partial(preparse_article_callback, batch_size), list(open(file, 'r')))
-    articles = [x for x in articles if x is not None]
-    logging.info('inserting %d rows' % len(articles))
+    data = pool.map(partial(preparse_article_callback, batch_size), list(open(file, 'r')))
+    logging.info('inserting %d words' % reduce(lambda x, y: x + y, [len(w) for (a, w) in data]))
+    words = []
+    for (a, w) in data:
+        words.extend(w)
+        if len(words) >= batch_size:
+            Word.objects.bulk_create(words, ignore_conflicts=True)
+            words = []
+    Word.objects.bulk_create(words, ignore_conflicts=True)
+    articles = [a for (a, w) in data if a is not None]
+    logging.info('inserting %d articles' % len(articles))
     Article.objects.bulk_create(articles, ignore_conflicts=True, batch_size=batch_size)
     logging.info('finish')
 
@@ -53,9 +61,9 @@ def preparse_polimorfologik(batch_size, file):
                 Word.objects.bulk_create(words, ignore_conflicts=True)
                 logging.debug('finish')
             except Exception as e:
-                logging.error('exeption during insert words:')
-                logging.error(e)
-                logging.error(words)
+                logging.warning('exeption during insert words:')
+                logging.warning(e)
+                logging.warning(words)
             words = []
     logging.info('finish')
 
@@ -91,9 +99,9 @@ def parse_articles_callback(batch_size, line):
         articlesParser.parseArticle(title, text, links)
         # print(json.dumps(data, indent=4, sort_keys=True))
     except Exception as e:
-        logging.error('exception durig parse_articles_callback:')
-        logging.error(e)
-        logging.error(line)
+        logging.warning('exception durig parse_articles_callback:')
+        logging.warning(e)
+        logging.warning(line)
 
 def parse_articles(batch_size, file, pool):
     logging.info('parse articles start')
