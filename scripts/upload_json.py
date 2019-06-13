@@ -19,13 +19,14 @@ def preparse_article_callback(batch_size, line):
         articlesParser = articles_parser.ArticlesParser(batch_size)
         words = []
         data = json.loads(line)
-        logging.debug('%s' % (data['title']))
+        title = data['title'].strip().lower()
+        logging.debug('%s' % (title))
 
         for baseText in data['interlinks']:
             logging.debug('%s - %s' % (baseText, data['interlinks'][baseText]))
             words.extend(articlesParser.addBaseForms(baseText, data['interlinks'][baseText]))
 
-        return (Article(title=data['title'].strip()), words)
+        return (Article(title=title), words)
     except Exception as e:
         logging.warning('exception durig preparse_article_callback:')
         logging.warning(e)
@@ -78,7 +79,7 @@ def parse_articles_callback(batch_size, line):
     ignoredSections = ['bibliografia', 'linki zewnętrzne', 'zobacz też', 'przypisy', 'uwagi']
     try:
         data = json.loads(line)
-        title = data['title'].strip()
+        title = data['title'].strip().lower()
         text = ''
         links = []
 
@@ -94,7 +95,7 @@ def parse_articles_callback(batch_size, line):
             text += sectionText
 
         for baseText in data['interlinks']:
-            links.append(baseText)
+            links.append(baseText.strip().lower())
 
         articlesParser.parseArticle(title, text, links)
         # print(json.dumps(data, indent=4, sort_keys=True))
@@ -126,14 +127,6 @@ def run(*args):
     logging.info('start')
     logging.info('threads: %d' % args.threads)
     logging.info('batch size: %d' % args.batch_size)
-
-    Solution.objects.all().delete()
-    Method.objects.all().delete()
-    Answer.objects.all().delete()
-    Question.objects.all().delete()
-    Occurrence.objects.all().delete()
-    Word.objects.all().delete()
-    Article.objects.all().delete()
 
     pool = multiprocess.Pool(args.threads)
     preparse_polimorfologik(args.batch_size, args.polimorfologik_file)

@@ -5,6 +5,7 @@ import mwparserfromhell
 import operator
 import re
 import logging
+import time
 
 class ArticlesParser():
 	def __init__ (self, batch_size):
@@ -49,17 +50,34 @@ class ArticlesParser():
 				pass
 
 	def parseArticle(self, title, text, links):
-		article = Article.objects.get(title__iexact=title)
+		article = Article.objects.get(title__exact=title)
 		for link in links:
 			try:
-				linkedArticle = Article.objects.get(title__iexact=link)
+				linkedArticle = Article.objects.get(title__exact=link)
 				article.links.add(linkedArticle)
 			except:
+				#logging.warning('link article not found source article: %s, target article: %s' % (title, link))
 				pass
 		title = self.normaliseText(title)
 		text = self.normaliseText(text)
-		self.parseText(article, title, True)
-		self.parseText(article, text, False)
+		for i in range(10):
+			try:
+				self.parseText(article, title, True)
+				if i != 0:
+					logging.warning('success parsing title article: %s' % title)
+				break
+			except:
+				logging.warning('retry parse title article: %s' % title)
+				time.sleep(1)
+		for i in range(10):
+			try:
+				self.parseText(article, text, False)
+				if i != 0:
+					logging.warning('success parsing text article: %s' % title)
+				break
+			except Exception as e:
+				logging.warning('retry parse text article: %s' % title)
+				time.sleep(1)
 
 	def parseText(self, article, text, isTitle):
 		new_words = []
