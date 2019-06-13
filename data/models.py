@@ -89,7 +89,7 @@ class Solution(models.Model):
         unique_together = ('answer', 'method')
 
 class Word(models.Model):
-    base_form = models.CharField(max_length=100)
+    base_form = models.CharField(max_length=100, db_index=True)
     changed_form = models.CharField(max_length=100, unique=True)
     is_stop_word = models.BooleanField(default=False)
     added_date = models.DateTimeField(auto_now_add=True)
