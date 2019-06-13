@@ -4,6 +4,7 @@ from collections import defaultdict
 import mwparserfromhell
 import operator
 import re
+import logging
 
 class ArticlesParser():
 	def __init__ (self, batch_size):
@@ -74,8 +75,12 @@ class ArticlesParser():
 		for w in words:
 			if len(w) > 1:
 				currentPos += 1
-				word = list(filter(lambda x: x.changed_form==w, created_words))[0]
-				positions[word.id].add(currentPos)
+				try:
+					word = list(filter(lambda x: x.changed_form==w, created_words))[0]
+					positions[word.id].add(currentPos)
+				except:
+					logging.warning('searching word id error:')
+					logging.warning(w)
 
 		new_occurrences = []
 		for word_id in positions:
