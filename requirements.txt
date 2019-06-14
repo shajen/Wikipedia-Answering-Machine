@@ -4,4 +4,5 @@ django-bootstrap3
 django-bootstrap-form
 mysqlclient
 django-admin-tools
-django>=2.2
+django
+gensim
