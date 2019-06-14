@@ -64,6 +64,16 @@ def preparse_articles(batch_size, file, category_tag, first_n_lines, pool):
 
     logging.info('finish')
 
+def insert_words(words):
+    logging.debug('inserting %d words' % len(words))
+    try:
+        Word.objects.bulk_create(words, ignore_conflicts=True)
+        logging.debug('finish')
+    except Exception as e:
+        logging.warning('exeption during insert words:')
+        logging.warning(e)
+        logging.warning(words)
+
 def preparse_polimorfologik(batch_size, file, category_tag, first_n_lines):
     logging.info('preparse polimorfologik start')
     words = []
@@ -71,19 +81,14 @@ def preparse_polimorfologik(batch_size, file, category_tag, first_n_lines):
     lines = list(open(file, 'r'))
     if first_n_lines > 0:
         lines = lines[:first_n_lines]
-    for line in lines:
-        data = line.strip().split('\t')
-        words.append(Word(base_form=data[1], changed_form=data[0]))
+    lines = list(set([tuple(line.strip().lower().split('\t')[:2]) for line in lines]))
+    logging.info('inserting %d words\n' % len(lines))
+    for (changed_form, base_form) in lines:
+        words.append(Word(base_form=base_form, changed_form=changed_form))
         if len(words) >= batch_size:
-            logging.debug('inserting %d rows' % len(words))
-            try:
-                Word.objects.bulk_create(words, ignore_conflicts=True)
-                logging.debug('finish')
-            except Exception as e:
-                logging.warning('exeption during insert words:')
-                logging.warning(e)
-                logging.warning(words)
+            insert_words(words)
             words = []
+    insert_words(words)
     logging.info('finish')
 
 def parse_stop_words(file, first_n_lines):
