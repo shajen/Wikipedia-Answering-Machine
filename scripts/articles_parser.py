@@ -50,11 +50,16 @@ class ArticlesParser():
 				pass
 
 	def parseArticle(self, title, text, links):
-		article = Article.objects.get(title__exact=title)
+		article = Article.objects.get(title=title)
 		for link in links:
 			try:
-				linkedArticle = Article.objects.get(title__exact=link)
-				article.links.add(linkedArticle)
+				category_tag = 'kategoria:'
+				if link.startswith(category_tag):
+					linkedCategory, created = Category.objects.get_or_create(title=link[len(category_tag):])
+					article.categories.add(linkedCategory)
+				else:
+					linkedArticle = Article.objects.get(title=link)
+					article.links.add(linkedArticle)
 			except:
 				#logging.warning('link article not found source article: %s, target article: %s' % (title, link))
 				pass

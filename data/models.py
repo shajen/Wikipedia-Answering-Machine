@@ -39,6 +39,13 @@ class ListField(models.TextField):
         value = self.value_from_object(obj)
         return self.get_prep_value(value)
 
+class Category(models.Model):
+    title = models.CharField(max_length=255, unique=True)
+    added_date = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name_plural = "Categories"
+
 class Article(models.Model):
     title = models.CharField(max_length=255, unique=True)
     links = models.ManyToManyField(
@@ -46,6 +53,7 @@ class Article(models.Model):
         related_name='links_relationship',
         symmetrical=False
     )
+    categories = models.ManyToManyField(Category)
     added_date = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
