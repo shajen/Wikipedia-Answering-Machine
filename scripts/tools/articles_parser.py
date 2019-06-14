@@ -8,8 +8,9 @@ import logging
 import time
 
 class ArticlesParser():
-	def __init__ (self, batch_size):
+	def __init__ (self, batch_size, category_tag):
 		self.batch_size = batch_size
+		self.category_tag = category_tag
 
 	def removeObjects(self, text, objects):
 		for t in objects:
@@ -49,20 +50,26 @@ class ArticlesParser():
 			except:
 				pass
 
+	def parseCategory(self, title, text, links):
+		pass
+
 	def parseArticle(self, title, text, links):
 		article = Article.objects.get(title=title)
 		for link in links:
-			try:
-				category_tag = 'kategoria:'
-				if link.startswith(category_tag):
-					linkedCategory, created = Category.objects.get_or_create(title=link[len(category_tag):])
+			if link.startswith(self.category_tag):
+				try:
+					linkedCategory, created = Category.objects.get_or_create(title=link[len(self.category_tag):])
 					article.categories.add(linkedCategory)
-				else:
+				except:
+					#logging.warning('link category not found source article: %s, target category: %s' % (title, link))
+					pass
+			else:
+				try:
 					linkedArticle = Article.objects.get(title=link)
 					article.links.add(linkedArticle)
-			except:
-				#logging.warning('link article not found source article: %s, target article: %s' % (title, link))
-				pass
+				except:
+					#logging.warning('link article not found source article: %s, target article: %s' % (title, link))
+					pass
 		title = self.normaliseText(title)
 		text = self.normaliseText(text)
 		for i in range(10):

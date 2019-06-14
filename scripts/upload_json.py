@@ -15,9 +15,9 @@ sys.path.append(os.path.dirname(__file__))
 import tools.articles_parser
 import tools.logger
 
-def preparse_article_callback(batch_size, line):
+def preparse_article_callback(batch_size, category_tag, line):
     try:
-        articlesParser = tools.articles_parser.ArticlesParser(batch_size)
+        articlesParser = tools.articles_parser.ArticlesParser(batch_size, category_tag)
         words = []
         data = json.loads(line)
         title = data['title'].strip().lower()
@@ -27,37 +27,45 @@ def preparse_article_callback(batch_size, line):
             logging.debug('%s - %s' % (baseText, data['interlinks'][baseText]))
             words.extend(articlesParser.addBaseForms(baseText, data['interlinks'][baseText]))
 
-        return (Article(title=title), words)
+        if title.startswith(category_tag):
+            title = title[len(category_tag):]
+            return (None, Category(title=title), words)
+        else:
+            return (Article(title=title), None, words)
     except Exception as e:
         logging.warning('exception durig preparse_article_callback:')
         logging.warning(e)
         logging.warning(line)
-        return (None, [])
+        return (None, None, [])
 
-def preparse_articles(batch_size, file, pool):
+def preparse_articles(batch_size, file, category_tag, pool):
     logging.info('preparse articles start')
     if file.endswith('.gz'):
         f = smart_open.smart_open(file, 'r')
     else:
         f = open(file, 'r')
-    data = pool.map(partial(preparse_article_callback, batch_size), list(f)[:1000])
-    logging.info('inserting %d words' % reduce(lambda x, y: x + y, [len(w) for (a, w) in data]))
+    data = pool.map(partial(preparse_article_callback, batch_size, category_tag), list(f)[:1000])
+    logging.info('inserting %d words' % reduce(lambda x, y: x + y, [len(w) for (a, c, w) in data]))
     words = []
-    for (a, w) in data:
+    for (a, c, w) in data:
         words.extend(w)
         if len(words) >= batch_size:
             Word.objects.bulk_create(words, ignore_conflicts=True)
             words = []
     Word.objects.bulk_create(words, ignore_conflicts=True)
-    articles = [a for (a, w) in data if a is not None]
+    articles = [a for (a, c, w) in data if a is not None]
     logging.info('inserting %d articles' % len(articles))
     Article.objects.bulk_create(articles, ignore_conflicts=True, batch_size=batch_size)
+    categories = [c for (a, c, w) in data if c is not None]
+    logging.info('inserting %d categories' % len(categories))
+    Category.objects.bulk_create(categories, ignore_conflicts=True, batch_size=batch_size)
+
     logging.info('finish')
 
-def preparse_polimorfologik(batch_size, file):
+def preparse_polimorfologik(batch_size, file, category_tag):
     logging.info('preparse polimorfologik start')
     words = []
-    articlesParser = tools.articles_parser.ArticlesParser(batch_size)
+    articlesParser = tools.articles_parser.ArticlesParser(batch_size, category_tag)
     for line in list(open(file, 'r')):
         data = line.strip().split('\t')
         words.append(Word(base_form=data[1], changed_form=data[0]))
@@ -79,8 +87,8 @@ def parse_stop_words(file):
     Word.objects.filter(base_form__in=stop_words).update(is_stop_word=True)
     logging.info('finish')
 
-def parse_articles_callback(batch_size, line):
-    articlesParser = tools.articles_parser.ArticlesParser(batch_size)
+def parse_articles_callback(batch_size, category_tag, line):
+    articlesParser = tools.articles_parser.ArticlesParser(batch_size, category_tag)
     ignoredSections = ['bibliografia', 'linki zewnętrzne', 'zobacz też', 'przypisy', 'uwagi']
     try:
         data = json.loads(line)
@@ -102,20 +110,24 @@ def parse_articles_callback(batch_size, line):
         for baseText in data['interlinks']:
             links.append(baseText.strip().lower())
 
-        articlesParser.parseArticle(title, text, links)
+        if title.startswith(category_tag):
+            title = title[len(category_tag):]
+            articlesParser.parseCategory(title, text, links)
+        else:
+            articlesParser.parseArticle(title, text, links)
         # print(json.dumps(data, indent=4, sort_keys=True))
     except Exception as e:
         logging.warning('exception durig parse_articles_callback:')
         logging.warning(e)
         logging.warning(line)
 
-def parse_articles(batch_size, file, pool):
+def parse_articles(batch_size, file, category_tag, pool):
     logging.info('parse articles start')
     if file.endswith('.gz'):
         f = smart_open.smart_open(file, 'r')
     else:
         f = open(file, 'r')
-    pool.map(partial(parse_articles_callback, batch_size), list(f)[:1000])
+    pool.map(partial(parse_articles_callback, batch_size, category_tag), list(f)[:1000])
     logging.info('parse stop words start')
 
 def run(*args):
@@ -127,6 +139,7 @@ def run(*args):
     parser.add_argument("json_articles_file", help="path to json articles file", type=str)
     parser.add_argument("polimorfologik_file", help="path to polimorfologik  file", type=str)
     parser.add_argument("stop_words_file", help="path to stop words file", type=str)
+    parser.add_argument("-c", "--category_tag", help="category tag", default="kategoria:", type=str)
     parser.add_argument("-t", "--threads", help="threads", type=int, default=1, choices=range(1, 33), metavar="int")
     parser.add_argument("-b", "--batch_size", help="batch_size", type=int, default=10000, metavar="int")
     parser.add_argument('-v', '--verbose', action='count', default=0)
@@ -137,11 +150,13 @@ def run(*args):
     logging.info('json: %s' % args.json_articles_file)
     logging.info('polimorfologik: %s' % args.polimorfologik_file)
     logging.info('stop_words: %s' % args.stop_words_file)
+    logging.info('category_tag: %s' % args.category_tag)
     logging.info('threads: %d' % args.threads)
     logging.info('batch size: %d' % args.batch_size)
 
     pool = multiprocess.Pool(args.threads)
-    preparse_polimorfologik(args.batch_size, args.polimorfologik_file)
-    preparse_articles(args.batch_size, args.json_articles_file, pool)
-    parse_articles(args.batch_size, args.json_articles_file, pool)
+    category_tag = args.category_tag.strip().lower()
+    preparse_polimorfologik(args.batch_size, args.polimorfologik_file, category_tag)
+    preparse_articles(args.batch_size, args.json_articles_file, category_tag, pool)
+    parse_articles(args.batch_size, args.json_articles_file, category_tag, pool)
     parse_stop_words(args.stop_words_file)
