@@ -7,6 +7,7 @@ import logging
 import os
 import shlex
 import sys
+import smart_open
 from functools import reduce, partial
 
 sys.path.append(os.path.dirname(__file__))
@@ -35,7 +36,11 @@ def preparse_article_callback(batch_size, line):
 
 def preparse_articles(batch_size, file, pool):
     logging.info('preparse articles start')
-    data = pool.map(partial(preparse_article_callback, batch_size), list(open(file, 'r')))
+    if file.endswith('.gz'):
+        f = smart_open.smart_open(file, 'r')
+    else:
+        f = open(file, 'r')
+    data = pool.map(partial(preparse_article_callback, batch_size), list(f)[:1000])
     logging.info('inserting %d words' % reduce(lambda x, y: x + y, [len(w) for (a, w) in data]))
     words = []
     for (a, w) in data:
@@ -106,7 +111,11 @@ def parse_articles_callback(batch_size, line):
 
 def parse_articles(batch_size, file, pool):
     logging.info('parse articles start')
-    pool.map(partial(parse_articles_callback, batch_size), list(open(file, 'r')))
+    if file.endswith('.gz'):
+        f = smart_open.smart_open(file, 'r')
+    else:
+        f = open(file, 'r')
+    pool.map(partial(parse_articles_callback, batch_size), list(f)[:1000])
     logging.info('parse stop words start')
 
 def run(*args):
