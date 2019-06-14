@@ -28,10 +28,13 @@ def run(*args):
 
     tools.logger.configLogger(args.verbose)
     logging.info('start')
+    logging.info('wiki_articles: %s' % args.wiki_articles_xml_bz2_file)
+    logging.info('json: %s' % args.json_articles_file)
     logging.info('threads: %d' % args.threads)
+    logging.info('min_article_character: %d' % args.min_article_character)
+    logging.info('interlinks: %d' % args.interlinks)
 
     gensim.corpora.wikicorpus.IGNORED_NAMESPACES.remove('Category')
     logging.info('ignored namespaces: %s' % gensim.corpora.wikicorpus.IGNORED_NAMESPACES)
-
     gensim.scripts.segment_wiki.segment_and_write_all_articles(args.wiki_articles_xml_bz2_file, args.json_articles_file, args.min_article_character, args.threads, args.interlinks)
     logging.info('finish')

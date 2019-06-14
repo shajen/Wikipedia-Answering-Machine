@@ -134,6 +134,9 @@ def run(*args):
 
     tools.logger.configLogger(args.verbose)
     logging.info('start')
+    logging.info('json: %s' % args.json_articles_file)
+    logging.info('polimorfologik: %s' % args.polimorfologik_file)
+    logging.info('stop_words: %s' % args.stop_words_file)
     logging.info('threads: %d' % args.threads)
     logging.info('batch size: %d' % args.batch_size)
 
