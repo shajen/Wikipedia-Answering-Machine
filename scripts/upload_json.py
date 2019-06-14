@@ -38,13 +38,15 @@ def preparse_article_callback(batch_size, category_tag, line):
         logging.warning(line)
         return (None, None, [])
 
-def preparse_articles(batch_size, file, category_tag, pool):
+def preparse_articles(batch_size, file, category_tag, first_n_lines, pool):
     logging.info('preparse articles start')
     if file.endswith('.gz'):
-        f = smart_open.smart_open(file, 'r')
+        lines = list(smart_open.smart_open(file, 'r'))
     else:
-        f = open(file, 'r')
-    data = pool.map(partial(preparse_article_callback, batch_size, category_tag), list(f)[:1000])
+        lines = list(open(file, 'r'))
+    if first_n_lines > 0:
+        lines = lines[:first_n_lines]
+    data = pool.map(partial(preparse_article_callback, batch_size, category_tag), lines)
     logging.info('inserting %d words' % reduce(lambda x, y: x + y, [len(w) for (a, c, w) in data]))
     words = []
     for (a, c, w) in data:
@@ -62,11 +64,14 @@ def preparse_articles(batch_size, file, category_tag, pool):
 
     logging.info('finish')
 
-def preparse_polimorfologik(batch_size, file, category_tag):
+def preparse_polimorfologik(batch_size, file, category_tag, first_n_lines):
     logging.info('preparse polimorfologik start')
     words = []
     articlesParser = tools.articles_parser.ArticlesParser(batch_size, category_tag)
-    for line in list(open(file, 'r')):
+    lines = list(open(file, 'r'))
+    if first_n_lines > 0:
+        lines = lines[:first_n_lines]
+    for line in lines:
         data = line.strip().split('\t')
         words.append(Word(base_form=data[1], changed_form=data[0]))
         if len(words) >= batch_size:
@@ -81,9 +86,12 @@ def preparse_polimorfologik(batch_size, file, category_tag):
             words = []
     logging.info('finish')
 
-def parse_stop_words(file):
+def parse_stop_words(file, first_n_lines):
     logging.info('parse stop words start')
-    stop_words = [line.strip().lower() for line in open(file, 'r')]
+    lines = list(open(file, 'r'))
+    if first_n_lines > 0:
+        lines = lines[:first_n_lines]
+    stop_words = [line.strip().lower() for line in lines]
     Word.objects.filter(base_form__in=stop_words).update(is_stop_word=True)
     logging.info('finish')
 
@@ -121,13 +129,15 @@ def parse_articles_callback(batch_size, category_tag, line):
         logging.warning(e)
         logging.warning(line)
 
-def parse_articles(batch_size, file, category_tag, pool):
+def parse_articles(batch_size, file, category_tag, first_n_lines, pool):
     logging.info('parse articles start')
     if file.endswith('.gz'):
-        f = smart_open.smart_open(file, 'r')
+        lines = list(smart_open.smart_open(file, 'r'))
     else:
-        f = open(file, 'r')
-    pool.map(partial(parse_articles_callback, batch_size, category_tag), list(f)[:1000])
+        lines = list(open(file, 'r'))
+    if first_n_lines > 0:
+        lines = lines[:first_n_lines]
+    pool.map(partial(parse_articles_callback, batch_size, category_tag), lines)
     logging.info('parse stop words start')
 
 def run(*args):
@@ -142,6 +152,7 @@ def run(*args):
     parser.add_argument("-c", "--category_tag", help="category tag", default="kategoria:", type=str)
     parser.add_argument("-t", "--threads", help="threads", type=int, default=1, choices=range(1, 33), metavar="int")
     parser.add_argument("-b", "--batch_size", help="batch_size", type=int, default=10000, metavar="int")
+    parser.add_argument('-f', '--first_n_lines', help="process only first n lines of each file", type=int, default=0)
     parser.add_argument('-v', '--verbose', action='count', default=0)
     args = parser.parse_args(args)
 
@@ -153,10 +164,12 @@ def run(*args):
     logging.info('category_tag: %s' % args.category_tag)
     logging.info('threads: %d' % args.threads)
     logging.info('batch size: %d' % args.batch_size)
+    logging.info('first_n_lines: %d' % args.first_n_lines)
 
     pool = multiprocess.Pool(args.threads)
     category_tag = args.category_tag.strip().lower()
-    preparse_polimorfologik(args.batch_size, args.polimorfologik_file, category_tag)
-    preparse_articles(args.batch_size, args.json_articles_file, category_tag, pool)
-    parse_articles(args.batch_size, args.json_articles_file, category_tag, pool)
-    parse_stop_words(args.stop_words_file)
+    first_n_lines = max(0, args.first_n_lines)
+    preparse_polimorfologik(args.batch_size, args.polimorfologik_file, category_tag, first_n_lines)
+    preparse_articles(args.batch_size, args.json_articles_file, category_tag, first_n_lines, pool)
+    parse_articles(args.batch_size, args.json_articles_file, category_tag, first_n_lines, pool)
+    parse_stop_words(args.stop_words_file, first_n_lines)
