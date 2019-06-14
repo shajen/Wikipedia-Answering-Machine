@@ -9,7 +9,7 @@ import shlex
 import sys
 sys.path.append(os.path.dirname(__file__))
 
-import logger
+import tools.logger
 
 def run(*args):
     try:

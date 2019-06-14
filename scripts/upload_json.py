@@ -12,12 +12,12 @@ from functools import reduce, partial
 
 sys.path.append(os.path.dirname(__file__))
 
-import articles_parser
-import logger
+import tools.articles_parser
+import tools.logger
 
 def preparse_article_callback(batch_size, line):
     try:
-        articlesParser = articles_parser.ArticlesParser(batch_size)
+        articlesParser = tools.articles_parser.ArticlesParser(batch_size)
         words = []
         data = json.loads(line)
         title = data['title'].strip().lower()
@@ -57,7 +57,7 @@ def preparse_articles(batch_size, file, pool):
 def preparse_polimorfologik(batch_size, file):
     logging.info('preparse polimorfologik start')
     words = []
-    articlesParser = articles_parser.ArticlesParser(batch_size)
+    articlesParser = tools.articles_parser.ArticlesParser(batch_size)
     for line in list(open(file, 'r')):
         data = line.strip().split('\t')
         words.append(Word(base_form=data[1], changed_form=data[0]))
@@ -80,7 +80,7 @@ def parse_stop_words(file):
     logging.info('finish')
 
 def parse_articles_callback(batch_size, line):
-    articlesParser = articles_parser.ArticlesParser(batch_size)
+    articlesParser = tools.articles_parser.ArticlesParser(batch_size)
     ignoredSections = ['bibliografia', 'linki zewnętrzne', 'zobacz też', 'przypisy', 'uwagi']
     try:
         data = json.loads(line)
@@ -132,7 +132,7 @@ def run(*args):
     parser.add_argument('-v', '--verbose', action='count', default=0)
     args = parser.parse_args(args)
 
-    logger.configLogger(args.verbose)
+    tools.logger.configLogger(args.verbose)
     logging.info('start')
     logging.info('threads: %d' % args.threads)
     logging.info('batch size: %d' % args.batch_size)

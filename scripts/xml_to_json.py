@@ -10,7 +10,7 @@ import argparse
 
 sys.path.append(os.path.dirname(__file__))
 
-import logger
+import tools.logger
 
 def run(*args):
     try:
@@ -26,7 +26,7 @@ def run(*args):
     parser.add_argument('-v', '--verbose', action='count', default=0)
     args = parser.parse_args(args)
 
-    logger.configLogger(args.verbose)
+    tools.logger.configLogger(args.verbose)
     logging.info('start')
     logging.info('threads: %d' % args.threads)
 
