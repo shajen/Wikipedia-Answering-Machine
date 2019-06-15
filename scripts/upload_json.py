@@ -40,10 +40,7 @@ def preparse_article_callback(batch_size, category_tag, line):
 
 def preparse_articles(batch_size, file, category_tag, first_n_lines, pool):
     logging.info('preparse articles start')
-    if file.endswith('.gz'):
-        lines = list(smart_open.smart_open(file, 'r'))
-    else:
-        lines = list(open(file, 'r'))
+    lines = list(smart_open.smart_open(file, 'r'))
     if first_n_lines > 0:
         lines = lines[:first_n_lines]
     data = pool.map(partial(preparse_article_callback, batch_size, category_tag), lines)
@@ -136,10 +133,7 @@ def parse_articles_callback(batch_size, category_tag, line):
 
 def parse_articles(batch_size, file, category_tag, first_n_lines, pool):
     logging.info('parse articles start')
-    if file.endswith('.gz'):
-        lines = list(smart_open.smart_open(file, 'r'))
-    else:
-        lines = list(open(file, 'r'))
+    lines = list(smart_open.smart_open(file, 'r'))
     if first_n_lines > 0:
         lines = lines[:first_n_lines]
     pool.map(partial(parse_articles_callback, batch_size, category_tag), lines)
