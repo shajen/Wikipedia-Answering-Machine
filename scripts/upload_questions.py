@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import shlex
+import re
 
 import sys
 sys.path.append(os.path.dirname(__file__))
@@ -12,6 +13,7 @@ sys.path.append(os.path.dirname(__file__))
 import tools.logger
 
 def run(*args):
+    logging.info('start')
     try:
         args = shlex.split(args[0])
     except IndexError:
@@ -22,7 +24,7 @@ def run(*args):
 
     args = parser.parse_args(args)
 
-    logger.configLogger(args.verbose)
+    tools.logger.configLogger(args.verbose)
 
     fp = open(args.questions, 'r')
     while True:
@@ -31,26 +33,29 @@ def run(*args):
         query = re.sub(' +',' ', query).lower().strip()
         if query == '':
             break
-        logging.info('read query:')
-        logging.info(query)
-        logging.info('answers:')
+        logging.debug('read query:')
+        logging.debug(query)
+        logging.debug('answers:')
         answers = []
         answer = fp.readline().strip()
         while answer != '':
             try:
-                article = Article.objects.filter(title__icontains=answer)[0]
+                article = Article.objects.get(title=answer.strip().lower())
+                logging.debug(article.title)
                 answers.append(article)
-            except:
+            except Exception as e:
                 pass
             answer = fp.readline().strip()
         if answers:
             try:
-                question = Question.objects.filter(name__icontains=query)[9]
-                logging.warning('question already exist in database')
-                logging.warning(question)
-            except:
-                question = Question.objects.create(name=query)
-                logging.info('create in database')
-                logging.info(question)
+                question, created = Question.objects.get_or_create(name=query)
+            except Exception as e:
+                logging.warning('exception during get_or_create question:')
+                logging.warning(e)
+                logging.warning(query)
             for answer in answers:
-                Answer.objects.create(question=question, article=answer)
+                try:
+                    Answer.objects.create(question=question, article=answer)
+                except:
+                    pass
+    logging.info('finish')

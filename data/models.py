@@ -99,7 +99,7 @@ class Solution(models.Model):
 class Word(models.Model):
     base_form = models.CharField(max_length=100, db_index=True)
     changed_form = models.CharField(max_length=100, unique=True)
-    is_stop_word = models.BooleanField(default=False)
+    is_stop_word = models.BooleanField(default=False, db_index=True)
     added_date = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -110,7 +110,7 @@ class Occurrence(models.Model):
     word = models.ForeignKey(Word, on_delete=models.CASCADE)
     positions = models.CharField(max_length=2048)
     positions_count = models.PositiveSmallIntegerField()
-    is_title = models.BooleanField(default=False)
+    is_title = models.BooleanField(default=False, db_index=True)
 
     def __str__(self):
         return '%s - %s: %s' % (self.word, self.article, self.positions)
