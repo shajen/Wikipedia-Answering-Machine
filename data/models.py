@@ -67,7 +67,7 @@ class Method(models.Model):
         return self.name
 
 class Question(models.Model):
-    name = models.CharField(max_length=255, unique=True)
+    name = models.TextField(max_length=1024)
     added_date = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
