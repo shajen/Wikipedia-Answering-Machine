@@ -137,7 +137,7 @@ def parse_articles(batch_size, file, category_tag, first_n_lines, pool):
     if first_n_lines > 0:
         lines = lines[:first_n_lines]
     pool.map(partial(parse_articles_callback, batch_size, category_tag), lines)
-    logging.info('parse stop words start')
+    logging.info('finish')
 
 def run(*args):
     try:
