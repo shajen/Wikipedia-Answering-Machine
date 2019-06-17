@@ -11,21 +11,23 @@ sys.path.append(os.path.dirname(__file__))
 
 import tools.logger
 
-def update_articles_count():
+def update_articles_words_count(is_title):
+    logging.info('start update_articles_words_count is_title: %d' % is_title)
     logging.info('reading stop words')
     stop_words = list(map(lambda x: x['id'], Word.objects.filter(is_stop_word = True).values('id')))
-    articles = Occurrence.objects.values('article_id').filter(is_title=False).exclude(word_id__in=stop_words).annotate(count=Sum('positions_count'))
-    logging.info('reading articles length')
-    articles_count = {}
-    i = 0
+    articles = Occurrence.objects.values('article_id').filter(is_title=is_title).exclude(word_id__in=stop_words).annotate(count=Sum('positions_count'))
+    logging.info('reading articles words count')
     for article in articles:
-        if i % 100000 == 0:
-            logging.info('reading articles %.2f%%' % (100.0 * i / len(articles)))
-            logging.info(article)
-        i += 1
-        if article['count']:
-            articles_count[article['article_id']] = article['count']
-    logging.info('finished articles count')
+        try:
+            if is_title:
+                Article.objects.filter(id=article['article_id']).update(title_words_count=article['count'])
+            else:
+                Article.objects.filter(id=article['article_id']).update(content_words_count=article['count'])
+        except Exception as e:
+            logging.warning('exception during update_articles_words_count:')
+            logging.warning(e)
+            logging.warning(article)
+    logging.info('finished update_articles_words_count')
 
 def run(*args):
     try:
@@ -38,5 +40,6 @@ def run(*args):
 
     tools.logger.configLogger(args.verbose)
     logging.info('start')
-    update_articles_count()
+    update_articles_words_count(True)
+    update_articles_words_count(False)
     logging.info('finish')

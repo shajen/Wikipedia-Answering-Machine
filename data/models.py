@@ -54,6 +54,8 @@ class Article(models.Model):
         symmetrical=False
     )
     categories = models.ManyToManyField(Category)
+    content_words_count = models.PositiveIntegerField(default=0)
+    title_words_count = models.PositiveIntegerField(default=0)
     added_date = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
