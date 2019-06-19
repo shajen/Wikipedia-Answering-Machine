@@ -6,10 +6,12 @@ import os
 import sys
 import shlex
 import argparse
+import re
 
 sys.path.append(os.path.dirname(__file__))
 
 import tools.logger
+import tools.weight_calculator
 
 def update_articles_words_count(is_title):
     logging.info('start update_articles_words_count is_title: %d' % is_title)
@@ -40,6 +42,10 @@ def run(*args):
 
     tools.logger.configLogger(args.verbose)
     logging.info('start')
-    update_articles_words_count(True)
-    update_articles_words_count(False)
+    #update_articles_words_count(True)
+    #update_articles_words_count(False)
+    wc = tools.weight_calculator.WeightCalculator()
+    wc.count_tf_idf(1, False)
+    wc.count_tf_idf(2, False)
+    wc.count_tf_idf(3, False)
     logging.info('finish')
