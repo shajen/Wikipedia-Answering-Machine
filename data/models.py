@@ -53,6 +53,12 @@ class Article(models.Model):
         related_name='links_relationship',
         symmetrical=False
     )
+    redirected_to = models.ForeignKey(
+        'self',
+        related_name='redirection_relationship',
+        null=True,
+        on_delete=models.CASCADE
+    )
     categories = models.ManyToManyField(Category)
     content_words_count = models.PositiveIntegerField(default=0)
     title_words_count = models.PositiveIntegerField(default=0)

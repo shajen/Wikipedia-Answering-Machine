@@ -97,7 +97,7 @@ def parse_stop_words(file, first_n_lines):
     Word.objects.filter(base_form__in=stop_words).update(is_stop_word=True)
     logging.info('finish')
 
-def parse_articles_callback(batch_size, category_tag, line):
+def parse_articles_callback(batch_size, category_tag, redirect_tag, line):
     articlesParser = tools.articles_parser.ArticlesParser(batch_size, category_tag)
     ignoredSections = ['bibliografia', 'linki zewnętrzne', 'zobacz też', 'przypisy', 'uwagi']
     try:
@@ -123,6 +123,8 @@ def parse_articles_callback(batch_size, category_tag, line):
         if title.startswith(category_tag):
             title = title[len(category_tag):]
             articlesParser.parseCategory(title, text, links)
+        elif text.lower().startswith(redirect_tag):
+            articlesParser.parseRedirect(title, text, links)
         else:
             articlesParser.parseArticle(title, text, links)
         # print(json.dumps(data, indent=4, sort_keys=True))
@@ -131,12 +133,12 @@ def parse_articles_callback(batch_size, category_tag, line):
         logging.warning(e)
         logging.warning(line)
 
-def parse_articles(batch_size, file, category_tag, first_n_lines, pool):
+def parse_articles(batch_size, file, category_tag, redirect_tag, first_n_lines, pool):
     logging.info('parse articles start')
     lines = list(smart_open.smart_open(file, 'r'))
     if first_n_lines > 0:
         lines = lines[:first_n_lines]
-    pool.map(partial(parse_articles_callback, batch_size, category_tag), lines)
+    pool.map(partial(parse_articles_callback, batch_size, category_tag, redirect_tag), lines)
     logging.info('finish')
 
 def run(*args):
@@ -149,6 +151,7 @@ def run(*args):
     parser.add_argument("polimorfologik_file", help="path to polimorfologik  file", type=str)
     parser.add_argument("stop_words_file", help="path to stop words file", type=str)
     parser.add_argument("-c", "--category_tag", help="category tag", default="kategoria:", type=str)
+    parser.add_argument("-r", "--redirect_tag", help="redirect tag", default="#PATRZ", type=str)
     parser.add_argument("-t", "--threads", help="threads", type=int, default=1, choices=range(1, 33), metavar="int")
     parser.add_argument("-b", "--batch_size", help="batch_size", type=int, default=10000, metavar="int")
     parser.add_argument('-f', '--first_n_lines', help="process only first n lines of each file", type=int, default=0)
@@ -161,14 +164,16 @@ def run(*args):
     logging.info('polimorfologik: %s' % args.polimorfologik_file)
     logging.info('stop_words: %s' % args.stop_words_file)
     logging.info('category_tag: %s' % args.category_tag)
+    logging.info('redirect_tag: %s' % args.redirect_tag)
     logging.info('threads: %d' % args.threads)
     logging.info('batch size: %d' % args.batch_size)
     logging.info('first_n_lines: %d' % args.first_n_lines)
 
     pool = multiprocess.Pool(args.threads)
     category_tag = args.category_tag.strip().lower()
+    redirect_tag = args.redirect_tag.strip().lower()
     first_n_lines = max(0, args.first_n_lines)
     preparse_polimorfologik(args.batch_size, args.polimorfologik_file, category_tag, first_n_lines)
     preparse_articles(args.batch_size, args.json_articles_file, category_tag, first_n_lines, pool)
-    parse_articles(args.batch_size, args.json_articles_file, category_tag, first_n_lines, pool)
+    parse_articles(args.batch_size, args.json_articles_file, category_tag, redirect_tag, first_n_lines, pool)
     parse_stop_words(args.stop_words_file, first_n_lines)
