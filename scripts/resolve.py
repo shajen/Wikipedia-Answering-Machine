@@ -38,9 +38,33 @@ def resolve_questions(questions, method_name, debug_top_articles, is_title):
     method, created = Method.objects.get_or_create(name=method_name)
     wc = tools.weight_calculator.WeightCalculator(debug_top_articles)
     for q in questions:
-        (answers_positions, articles_ranking) = wc.count_tf_idf(q, is_title)
-        for (answer, position) in answers_positions:
+        logging.info('processing question:')
+        logging.info('%d: %s' % (q.id, q.name))
+
+        logging.info('')
+        logging.info('tf-idf')
+        articles_words_weight = wc.count_tf_idf(q, is_title)
+        articles_words_positions = wc.count_positions(q, articles_words_weight, 3)
+        for (answer, position) in articles_words_positions:
             Solution.objects.create(answer=answer, position=position, method=method)
+        logging.info(articles_words_positions)
+
+        articles_weight = wc.count_weights(articles_words_weight, 3)
+        logging.info('')
+        logging.info('links')
+        (articles_links_articles_weight, articles_reverse_links_articles_weight) = wc.count_articles_links_weight(articles_weight)
+        articles_links_articles_positions = wc.count_positions(q, articles_links_articles_weight, 0)
+        logging.info(articles_links_articles_positions)
+        logging.info('')
+        logging.info('reverse links')
+        articles_reverse_links_articles_positions = wc.count_positions(q, articles_reverse_links_articles_weight, 0)
+        logging.info(articles_reverse_links_articles_positions)
+
+        logging.info('')
+        logging.info('categories')
+        categories_articles_weight = wc.count_categories_weight(articles_weight)
+        categories_articles_positions = wc.count_positions(q, categories_articles_weight, 0)
+        logging.info(categories_articles_positions)
 
 def run(*args):
     try:
