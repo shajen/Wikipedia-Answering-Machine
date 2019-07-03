@@ -4,8 +4,9 @@ import logging
 import re
 
 class QuestionsParser:
-    def __init__(self):
+    def __init__(self, min_article_character):
         logging.info('reading articles')
+        self.min_article_character = min_article_character
         articles = Article.objects.values('id', 'content_words_count', 'title', 'redirected_to_id')
         self.articles_redirected_to = {}
         self.articles_content_count = {}
@@ -54,6 +55,15 @@ class QuestionsParser:
                     while article_id in self.articles_redirected_to and self.articles_redirected_to[article_id] != article_id:
                         logging.debug('%s redirected to %s' % (self.articles_title[article_id], self.articles_title[self.articles_redirected_to[article_id]]))
                         article_id = self.articles_redirected_to[article_id]
-                    Answer.objects.create(question=question, article_id=article_id)
+                    if self.articles_content_count[article_id] >= self.min_article_character:
+                        Answer.objects.create(question=question, article_id=article_id)
                 except:
                     pass
+            try:
+                if question.answer_set.count() == 0:
+                    logging.debug('delete question without answer: %d %s' % (question.id, question_text))
+                    question.delete()
+            except Exception as e:
+                logging.warning('exception during delete question:')
+                logging.warning(e)
+                logging.warning(question_text)

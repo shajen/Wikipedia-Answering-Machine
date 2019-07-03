@@ -20,10 +20,11 @@ def run(*args):
         args = []
     parser = argparse.ArgumentParser()
     parser.add_argument("questions", help="path to questions file")
+    parser.add_argument("-m", "--min_article_character", help="min article character", type=int, default=200, metavar="int")
     parser.add_argument('-v', '--verbose', action='count', default=0)
 
     args = parser.parse_args(args)
 
     tools.logger.configLogger(args.verbose)
-    questionsParser = tools.questions_parser.QuestionsParser()
+    questionsParser = tools.questions_parser.QuestionsParser(args.min_article_character)
     questionsParser.parse_file(args.questions)
