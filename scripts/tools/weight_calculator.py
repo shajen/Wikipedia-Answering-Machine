@@ -37,6 +37,12 @@ class WeightCalculator:
                 weight = articles_words_weights[article_id][word_id]
                 logging.debug('  - %8d: %3.6f, %d, %s' % (word_id, weight, articles_words_count[article_id][word_id], word.changed_form))
 
+    def get_article_position(self, articles_ranking, article_id):
+        for i in range(len(articles_ranking)):
+            if articles_ranking[i][0] == article_id:
+                return i + 1
+        return 10**9
+
     def count_tf_idf(self, question, is_title):
         logging.info('')
         logging.info('processing question:')
@@ -72,13 +78,18 @@ class WeightCalculator:
         for article_id in articles_words_weights:
             count = len(articles_words_weights[article_id])
             articles_weight[article_id] = math.pow(count, 3) * reduce((lambda x, y: x + y), articles_words_weights[article_id].values())
-        articles_ranking = list(map(lambda x: x[0], sorted(articles_weight.items(), key=operator.itemgetter(1), reverse=True)))
+        articles_ranking = list(map(lambda x: (x[0], x[1]), sorted(articles_weight.items(), key=operator.itemgetter(1), reverse=True)))
 
         if self.debug_top_articles > 0:
             logging.info('top %d articles:' % self.debug_top_articles)
-            for article_id in articles_ranking[:self.debug_top_articles]:
+            for (article_id, article_weight) in articles_ranking[:self.debug_top_articles]:
                 self.print_article(article_id, is_title, articles_words_count, articles_weight, articles_words_weights)
 
         logging.info('expected articles:')
+        answers_positions = []
         for answer in question.answer_set.all():
             self.print_article(answer.article.id, is_title, articles_words_count, articles_weight, articles_words_weights)
+            position = self.get_article_position(articles_ranking, answer.article.id)
+            logging.info('position: %d' % position)
+            answers_positions.append((answer, position))
+        return (answers_positions, articles_ranking)

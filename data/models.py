@@ -94,7 +94,7 @@ class Answer(models.Model):
 
 class Solution(models.Model):
     answer = models.ForeignKey(Answer, on_delete=models.CASCADE)
-    method = models.ForeignKey(Article, on_delete=models.CASCADE)
+    method = models.ForeignKey(Method, on_delete=models.CASCADE)
     position = models.IntegerField()
     added_date = models.DateTimeField(auto_now_add=True)
 
