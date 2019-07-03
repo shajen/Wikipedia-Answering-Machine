@@ -31,14 +31,14 @@ class WeightCalculator:
         else:
             logging.info('%7d: %3.6f, %d, %s' % (article_id, weight, self.articles_content_count[article_id], self.articles_title[article_id]))
 
-        for word_id in articles_words_weights[article_id]:
-            word = Word.objects.get(id=word_id)
-            weight = articles_words_weights[article_id][word_id]
-            logging.debug('  - %8d: %3.6f, %d, %s' % (word_id, weight, articles_words_count[article_id][word_id], word.changed_form))
+        if logging.getLogger().level <= logging.DEBUG:
+            for word_id in articles_words_weights[article_id]:
+                word = Word.objects.get(id=word_id)
+                weight = articles_words_weights[article_id][word_id]
+                logging.debug('  - %8d: %3.6f, %d, %s' % (word_id, weight, articles_words_count[article_id][word_id], word.changed_form))
 
-    def count_tf_idf(self, question_id, is_title):
+    def count_tf_idf(self, question, is_title):
         logging.info('')
-        question = Question.objects.get(id=question_id)
         logging.info('processing question:')
         logging.info('%d: %s' % (question.id, question.name))
         words = re.findall('(\d+(?:\.|,)\d+|\w+|\.)', question.name)
