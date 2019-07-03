@@ -7,8 +7,9 @@ import operator
 import re
 
 class WeightCalculator:
-    def __init__(self):
+    def __init__(self, debug_top_articles):
         logging.info('start reading articles')
+        self.debug_top_articles = debug_top_articles
         articles = Article.objects.values('id', 'title_words_count', 'content_words_count', 'title')
         self.articles_title_count = {}
         self.articles_content_count = {}
@@ -36,7 +37,6 @@ class WeightCalculator:
             logging.debug('  - %8d: %3.6f, %d, %s' % (word_id, weight, articles_words_count[article_id][word_id], word.changed_form))
 
     def count_tf_idf(self, question_id, is_title):
-        TOP = 3
         logging.info('')
         question = Question.objects.get(id=question_id)
         logging.info('processing question:')
@@ -74,9 +74,10 @@ class WeightCalculator:
             articles_weight[article_id] = math.pow(count, 3) * reduce((lambda x, y: x + y), articles_words_weights[article_id].values())
         articles_ranking = list(map(lambda x: x[0], sorted(articles_weight.items(), key=operator.itemgetter(1), reverse=True)))
 
-        logging.info('top %d articles:' % TOP)
-        for article_id in articles_ranking[:TOP]:
-            self.print_article(article_id, is_title, articles_words_count, articles_weight, articles_words_weights)
+        if self.debug_top_articles > 0:
+            logging.info('top %d articles:' % self.debug_top_articles)
+            for article_id in articles_ranking[:self.debug_top_articles]:
+                self.print_article(article_id, is_title, articles_words_count, articles_weight, articles_words_weights)
 
         logging.info('expected articles:')
         for answer in question.answer_set.all():

@@ -37,6 +37,7 @@ def run(*args):
     except IndexError:
         args = []
     parser = argparse.ArgumentParser()
+    parser.add_argument("-dta", "--debug_top_articles", help="print top n articles in debug", type=int, default=3, metavar="int")
     parser.add_argument('-v', '--verbose', action='count', default=0)
     args = parser.parse_args(args)
 
@@ -44,7 +45,7 @@ def run(*args):
     logging.info('start')
     #update_articles_words_count(True)
     #update_articles_words_count(False)
-    wc = tools.weight_calculator.WeightCalculator()
+    wc = tools.weight_calculator.WeightCalculator(args.debug_top_articles)
     wc.count_tf_idf(1, False)
     wc.count_tf_idf(2, False)
     wc.count_tf_idf(3, False)
