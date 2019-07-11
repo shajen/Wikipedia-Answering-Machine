@@ -46,6 +46,9 @@ class Category(models.Model):
     class Meta:
         verbose_name_plural = "Categories"
 
+    def __str__(self):
+        return self.title
+        
 class Article(models.Model):
     title = models.CharField(max_length=255, unique=True)
     links = models.ManyToManyField(
