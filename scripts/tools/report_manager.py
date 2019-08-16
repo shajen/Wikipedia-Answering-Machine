@@ -54,7 +54,7 @@ class ReportManager():
                 sys.stdout.write('%s %5d' % (' ' * LEN, answersCount))
             positions = methods_questions_positions[method.id].values()
             positions = [list(x) for x in positions]
-            positions = reduce(lambda x, y: x + y, positions)
+            positions = reduce(lambda x, y: x + y, positions, [])
             for t in args['tops']:
                 corrected = len(list(filter(lambda x: x <= t, positions)))
                 sys.stdout.write("  %.4f" % (0 if answersCount == 0 else float(corrected)/answersCount))
