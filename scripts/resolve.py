@@ -15,6 +15,7 @@ sys.path.append(os.path.dirname(__file__))
 import calculators.categories_weight_calculator
 import calculators.links_weight_calculator
 import calculators.tf_idf_weight_calculator
+import calculators.vector_weight_calculator
 import calculators.weight_calculator
 import tools.logger
 
@@ -38,6 +39,9 @@ def update_articles_words_count(is_title):
 
 def resolve_questions(questions, method_name, debug_top_items):
     tf_idf_wc = calculators.tf_idf_weight_calculator.TfIdfWeightCalculator(debug_top_items)
+    cosine_wc = calculators.vector_weight_calculator.CosineVectorWeightCalculator(debug_top_items)
+    euclidean_wc = calculators.vector_weight_calculator.EuclideanVectorWeightCalculator(debug_top_items)
+    city_wc = calculators.vector_weight_calculator.CityblockVectorWeightCalculator(debug_top_items)
     links_wc = calculators.links_weight_calculator.LinksWeightCalculator(debug_top_items)
     categories_wc = calculators.categories_weight_calculator.CategoriesWeightCalculator(debug_top_items)
 
@@ -47,14 +51,19 @@ def resolve_questions(questions, method_name, debug_top_items):
         logging.info('processing question:')
         logging.info('%d: %s' % (q.id, q.name))
 
-        (articles_words_weight, articles_weight) = tf_idf_wc.get_weights(q, False, False)
+        (question_words_weight, articles_words_weight, articles_weight) = tf_idf_wc.get_weights(q, False, False)
         tf_idf_wc.upload_positions(q, method_name, False, articles_words_weight, articles_weight)
+        cosine_wc.upload_positions(q, method_name, False, question_words_weight, articles_words_weight)
+        euclidean_wc.upload_positions(q, method_name, False, question_words_weight, articles_words_weight)
+        city_wc.upload_positions(q, method_name, False, question_words_weight, articles_words_weight)
 
-        (articles_words_neighbors_weight, articles_weight_neighbors) = tf_idf_wc.get_weights(q, False, True)
+        (question_words_neighbors_weights, articles_words_neighbors_weight, articles_weight_neighbors) = tf_idf_wc.get_weights(q, False, True)
         tf_idf_wc.upload_positions(q, method_name, True, articles_words_neighbors_weight, articles_weight_neighbors)
+        cosine_wc.upload_positions(q, method_name, True, question_words_neighbors_weights, articles_words_neighbors_weight)
+        euclidean_wc.upload_positions(q, method_name, True, question_words_neighbors_weights, articles_words_neighbors_weight)
+        city_wc.upload_positions(q, method_name, True, question_words_neighbors_weights, articles_words_neighbors_weight)
 
         links_wc.upload_positions(q, method_name, articles_weight)
-
         categories_wc.upload_positions(q, method_name, articles_weight)
 
 def run(*args):

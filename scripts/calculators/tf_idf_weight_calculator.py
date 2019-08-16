@@ -38,6 +38,13 @@ class TfIdfWeightCalculator(calculators.weight_calculator.WeightCalculator):
         for word_id in words_articles_count:
             words_idf[word_id] = math.log(len(self.articles_title_count) / words_articles_count[word_id])
 
+        question_words_weights = {}
+        for word in words:
+            try:
+                question_words_weights[word] = words_idf[word] / len(words)
+            except:
+                pass
+
         articles_words_weights = defaultdict(defaultdict)
         for item_id in articles_words_count:
             for word_id in articles_words_count[item_id]:
@@ -54,7 +61,7 @@ class TfIdfWeightCalculator(calculators.weight_calculator.WeightCalculator):
                     else:
                         tf = articles_words_count[item_id][word_id] / self.articles_content_count[item_id]
                     articles_words_weights[item_id][word_id] = tf * words_idf[word_id]
-        return articles_words_weights
+        return (question_words_weights, articles_words_weights)
 
     def get_weights(self, question, is_title, sum_neighbors):
         logging.info('')
@@ -63,11 +70,11 @@ class TfIdfWeightCalculator(calculators.weight_calculator.WeightCalculator):
         else:
             logging.info('tf-idf')
 
-        articles_words_weight = self.__count_tf_idf(question, is_title, sum_neighbors)
-        return (articles_words_weight, self._count_weights(articles_words_weight, 3))
+        (question_words_weights, articles_words_weight) = self.__count_tf_idf(question, is_title, sum_neighbors)
+        return (question_words_weights, articles_words_weight, self._count_weights(articles_words_weight, 3))
 
     def upload_positions(self, question, method_name, sum_neighbors, articles_words_weight, articles_weight):
-        positions = self._count_positions(question, articles_words_weight, articles_weight, Article.objects, Word.objects)
+        positions = self._count_positions(question, articles_words_weight, articles_weight, True, Article.objects, Word.objects)
         if sum_neighbors:
             self._upload_positions(positions, method_name + ", type: tf_idf")
         else:

@@ -36,8 +36,8 @@ class LinksWeightCalculator(calculators.weight_calculator.WeightCalculator):
         articles_links_weights = self._count_weights(articles_links_articles_weight, 0)
         articles_reverse_links_weights = self._count_weights(articles_reverse_links_articles_weight, 0)
 
-        articles_links_positions = self._count_positions(q, articles_links_articles_weight, articles_links_weights, Article.objects, Article.objects)
-        articles_reverse_links_positions = self._count_positions(q, articles_reverse_links_articles_weight, articles_reverse_links_weights, Article.objects, Article.objects)
+        articles_links_positions = self._count_positions(q, articles_links_articles_weight, articles_links_weights, True, Article.objects, Article.objects)
+        articles_reverse_links_positions = self._count_positions(q, articles_reverse_links_articles_weight, articles_reverse_links_weights, True, Article.objects, Article.objects)
 
         self._upload_positions(articles_links_positions, method_name + ", type: link")
         self._upload_positions(articles_reverse_links_positions, method_name + ", type: reverse_link")

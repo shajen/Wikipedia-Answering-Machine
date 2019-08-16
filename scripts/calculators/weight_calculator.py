@@ -49,8 +49,8 @@ class WeightCalculator:
             items_weight = {k: v / max_weight for k, v in items_weight.items()}
         return items_weight
 
-    def _count_positions(self, question, items_id_weights, items_weight, item_objects, id_objects):
-        items_ranking = Counter(items_weight).most_common()
+    def _count_positions(self, question, items_id_weights, items_weight, ascending_order, item_objects, id_objects):
+        items_ranking = sorted(items_weight.items(), key=operator.itemgetter(1), reverse=ascending_order)
 
         if self.debug_top_items > 0:
             logging.info('top %d items:' % self.debug_top_items)

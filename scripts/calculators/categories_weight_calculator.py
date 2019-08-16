@@ -48,7 +48,7 @@ class CategoriesWeightCalculator(calculators.weight_calculator.WeightCalculator)
         categories_articles_weight = self.__count_categories_weight(articles_weight, 10)
         articles_categories_weight = self.__count_articles_categories_weight(categories_articles_weight, 10, 0)
         articles_weights = self._count_weights(articles_categories_weight, 0)
-        articles_categories_positions = self._count_positions(q, articles_categories_weight, articles_weights, Article.objects, Category.objects)
+        articles_categories_positions = self._count_positions(q, articles_categories_weight, articles_weights, True, Article.objects, Category.objects)
 
         self._upload_positions(articles_categories_positions, method_name + ", type: categories")
         return articles_categories_positions
