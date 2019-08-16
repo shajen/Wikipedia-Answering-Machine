@@ -32,7 +32,7 @@ class WeightCalculator:
             self.articles_links[data['id']].add(data['links'])
         logging.info('finish reading')
 
-    def print_item(self, item_id, items_weight, items_id_weights, item_objects, id_objects):
+    def __print_item(self, item_id, items_weight, items_id_weights, item_objects, id_objects):
         try:
             weight = items_weight[item_id]
         except:
@@ -46,7 +46,7 @@ class WeightCalculator:
                 weight = items_id_weights[item_id][id]
                 logging.debug('  - %8d: %3.6f - %s' % (id, weight, id_objects.get(id=id)))
 
-    def get_article_position(self, items_ranking, item_id):
+    def __get_article_position(self, items_ranking, item_id):
         for i in range(len(items_ranking)):
             if items_ranking[i][0] == item_id:
                 return i + 1
@@ -69,13 +69,13 @@ class WeightCalculator:
         if self.debug_top_items > 0:
             logging.info('top %d items:' % self.debug_top_items)
             for (item_id, weight) in items_ranking[:self.debug_top_items]:
-                self.print_item(item_id, items_weight, items_id_weights, item_objects, id_objects)
+                self.__print_item(item_id, items_weight, items_id_weights, item_objects, id_objects)
 
         logging.info('expected items:')
         answers_positions = []
         for answer in question.answer_set.all():
-            self.print_item(answer.article.id, items_weight, items_id_weights, item_objects, id_objects)
-            position = self.get_article_position(items_ranking, answer.article.id)
+            self.__print_item(answer.article.id, items_weight, items_id_weights, item_objects, id_objects)
+            position = self.__get_article_position(items_ranking, answer.article.id)
             logging.info('position: %d' % position)
             answers_positions.append((answer, position))
         return answers_positions
@@ -126,26 +126,26 @@ class WeightCalculator:
                     articles_words_weights[item_id][word_id] = tf * words_idf[word_id]
         return articles_words_weights
 
-    def get_top_n_items(self, dict, n):
+    def __get_top_n_items(self, dict, n):
         return {k: v for (k, v) in Counter(dict).most_common(n)}
 
     def count_articles_categories_weight(self, categories_items_weight, n, power_factor):
         for category_id in categories_items_weight:
-            categories_items_weight[category_id] = self.get_top_n_items(categories_items_weight[category_id], n)
+            categories_items_weight[category_id] = self.__get_top_n_items(categories_items_weight[category_id], n)
         categories_weight = self.count_weights(categories_items_weight, power_factor)
 
         if self.debug_top_items > 0:
             categories_ranking = Counter(categories_weight).most_common()
             logging.info('top %d categories:' % self.debug_top_items)
             for (id, weight) in categories_ranking[:self.debug_top_items]:
-                self.print_item(id, categories_weight, categories_items_weight, Category.objects, Article.objects)
+                self.__print_item(id, categories_weight, categories_items_weight, Category.objects, Article.objects)
 
         articles_categories_weight = defaultdict(defaultdict)
         for category_id in self.categories_articles:
             for article_id in self.categories_articles[category_id]:
                 articles_categories_weight[article_id][category_id] = categories_weight[category_id]
         for article_id in articles_categories_weight:
-            articles_categories_weight[article_id] = self.get_top_n_items(articles_categories_weight[article_id], n)
+            articles_categories_weight[article_id] = self.__get_top_n_items(articles_categories_weight[article_id], n)
         return articles_categories_weight
 
     def count_categories_weight(self, articles_weight, n):
@@ -154,7 +154,7 @@ class WeightCalculator:
             for article_id in self.categories_articles[category_id]:
                 if article_id in articles_weight:
                     categories_items_weight[category_id][article_id] = articles_weight[article_id]
-            categories_items_weight[category_id] = self.get_top_n_items(categories_items_weight[category_id], n)
+            categories_items_weight[category_id] = self.__get_top_n_items(categories_items_weight[category_id], n)
         return categories_items_weight
 
     def count_articles_links_weight(self, articles_weight, n):
@@ -168,7 +168,7 @@ class WeightCalculator:
                     if article_id in articles_weight:
                         articles_reverse_links_items_weight[article_link_id][article_id] = articles_weight[article_id]
         for article_id in articles_links_items_weight:
-            articles_links_items_weight[article_id] = self.get_top_n_items(articles_links_items_weight[article_id], n)
+            articles_links_items_weight[article_id] = self.__get_top_n_items(articles_links_items_weight[article_id], n)
         for article_id in articles_reverse_links_items_weight:
-            articles_reverse_links_items_weight[article_id] = self.get_top_n_items(articles_reverse_links_items_weight[article_id], n)
+            articles_reverse_links_items_weight[article_id] = self.__get_top_n_items(articles_reverse_links_items_weight[article_id], n)
         return (articles_links_items_weight, articles_reverse_links_items_weight)
