@@ -36,19 +36,28 @@ def update_articles_words_count(is_title):
 
 def resolve_questions(questions, method_name, debug_top_items, is_title):
     method_tf_idf, created = Method.objects.get_or_create(name=method_name + ", type: tf_idf")
+    method_tf_idf_neighbours, created = Method.objects.get_or_create(name=method_name + ", type: tf_idf_neighbours")
     method_link, created = Method.objects.get_or_create(name=method_name + ", type: link")
     method_reverse_link, created = Method.objects.get_or_create(name=method_name + ", type: reverse_link")
     method_category, created = Method.objects.get_or_create(name=method_name + ", type: category")
     wc = tools.weight_calculator.WeightCalculator(debug_top_items)
     for q in questions:
+        logging.info('')
+        logging.info('*' * 80)
         logging.info('processing question:')
         logging.info('%d: %s' % (q.id, q.name))
 
         logging.info('')
         logging.info('tf-idf')
-        articles_words_weight = wc.count_tf_idf(q, is_title)
+        articles_words_weight = wc.count_tf_idf(q, is_title, False)
         articles_words_positions = wc.count_positions(q, articles_words_weight, 3, Article.objects, Word.objects)
         logging.info(articles_words_positions)
+
+        logging.info('')
+        logging.info('tf-idf neighbors')
+        articles_words_weight_neighbors = wc.count_tf_idf(q, is_title, True)
+        articles_words_positions_neighbors = wc.count_positions(q, articles_words_weight_neighbors, 1.7, Article.objects, Word.objects)
+        logging.info(articles_words_positions_neighbors)
 
         articles_weight = wc.count_weights(articles_words_weight, 3)
         logging.info('')
@@ -69,7 +78,9 @@ def resolve_questions(questions, method_name, debug_top_items, is_title):
         logging.info(articles_categories_positions)
 
         for (answer, position) in articles_words_positions:
-            Solution.objects.create(answer=answer, position=position, method=method_tf_idf)
+           Solution.objects.create(answer=answer, position=position, method=method_tf_idf)
+        for (answer, position) in articles_words_positions_neighbors:
+           Solution.objects.create(answer=answer, position=position, method=method_tf_idf_neighbours)
         for (answer, position) in articles_links_articles_positions:
             Solution.objects.create(answer=answer, position=position, method=method_link)
         for (answer, position) in articles_reverse_links_articles_positions:

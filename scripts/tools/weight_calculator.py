@@ -6,6 +6,7 @@ import logging
 import math
 import operator
 import re
+import numpy as np
 
 class WeightCalculator:
     def __init__(self, debug_top_items):
@@ -79,15 +80,24 @@ class WeightCalculator:
             answers_positions.append((answer, position))
         return answers_positions
 
-    def count_tf_idf(self, question, is_title):
+    def count_tf_idf(self, question, is_title, sum_neighbors):
         words = re.findall('(\d+(?:\.|,)\d+|\w+|\.)', question.name)
         words = Word.objects.filter(changed_form__in=words, is_stop_word=False).values('id')
         words = list(map(lambda x: x['id'], words))
 
         articles_words_count = defaultdict(lambda: defaultdict(lambda: 0))
-        occurrences = Occurrence.objects.filter(word_id__in=words, is_title=is_title).values('id', 'article_id', 'word_id', 'positions_count')
+        articles_words_positions = defaultdict(defaultdict)
+        articles_positions = defaultdict(list)
+        if sum_neighbors:
+            occurrences = Occurrence.objects.filter(word_id__in=words, is_title=is_title).values('id', 'article_id', 'word_id', 'positions_count', 'positions')
+        else:
+            occurrences = Occurrence.objects.filter(word_id__in=words, is_title=is_title).values('id', 'article_id', 'word_id', 'positions_count')
         for occurrence in occurrences:
             articles_words_count[occurrence['article_id']][occurrence['word_id']] += occurrence['positions_count']
+            if sum_neighbors: #and len(positions) == occurrence['positions_count']:
+                positions = [int(p) for p in occurrence['positions'].strip().split(',') if p]
+                articles_words_positions[occurrence['article_id']][occurrence['word_id']] = positions
+                articles_positions[occurrence['article_id']].extend([(p, occurrence['word_id']) for p in positions])
 
         words_articles_count = defaultdict(lambda: 0)
         for item_id in articles_words_count:
@@ -101,11 +111,19 @@ class WeightCalculator:
         articles_words_weights = defaultdict(defaultdict)
         for item_id in articles_words_count:
             for word_id in articles_words_count[item_id]:
-                if is_title:
-                    tf = articles_words_count[item_id][word_id] / self.articles_title_count[item_id]
+                if sum_neighbors:
+                    w = 0.0
+                    for position in articles_words_positions[item_id][word_id]:
+                        positions = [word_id for (p, word_id) in articles_positions[item_id] if abs(p - position) <= 2]
+                        positions = np.unique(positions)
+                        w += math.pow(1.7, len(positions)) / articles_words_count[item_id][word_id]
+                    articles_words_weights[item_id][word_id] = w * words_idf[word_id]
                 else:
-                    tf = articles_words_count[item_id][word_id] / self.articles_content_count[item_id]
-                articles_words_weights[item_id][word_id] = tf * words_idf[word_id]
+                    if is_title:
+                        tf = articles_words_count[item_id][word_id] / self.articles_title_count[item_id]
+                    else:
+                        tf = articles_words_count[item_id][word_id] / self.articles_content_count[item_id]
+                    articles_words_weights[item_id][word_id] = tf * words_idf[word_id]
         return articles_words_weights
 
     def get_top_n_items(self, dict, n):
