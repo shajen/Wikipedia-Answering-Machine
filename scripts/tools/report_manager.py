@@ -28,10 +28,12 @@ class ReportManager():
 
     def calculateMethodsQuestionsPositions(self, args):
         methods_questions_positions = defaultdict(lambda: defaultdict(set))
+        question_id = 0
         for solution in Solution.objects.all():
             position = solution.position
             method_id = solution.method_id
-            question_id = solution.answer.question.id
+            # question_id = solution.answer.question.id
+            question_id += 1 #just for acceleration
             if not args['showNotFound'] and position == 10**9:
                 continue
             methods_questions_positions[method_id][question_id].add(position)
