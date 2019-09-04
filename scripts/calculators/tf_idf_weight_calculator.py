@@ -19,9 +19,9 @@ class TfIdfWeightCalculator(calculators.weight_calculator.WeightCalculator):
         articles_words_positions = defaultdict(defaultdict)
         articles_positions = defaultdict(list)
         if sum_neighbors:
-            occurrences = Occurrence.objects.filter(word_id__in=words, is_title=is_title).values('id', 'article_id', 'word_id', 'positions_count', 'positions')
+            occurrences = Occurrence.objects.filter(word_id__in=words, is_title=is_title).values('article_id', 'word_id', 'positions_count', 'positions')
         else:
-            occurrences = Occurrence.objects.filter(word_id__in=words, is_title=is_title).values('id', 'article_id', 'word_id', 'positions_count')
+            occurrences = Occurrence.objects.filter(word_id__in=words, is_title=is_title).values('article_id', 'word_id', 'positions_count')
         for occurrence in occurrences:
             articles_words_count[occurrence['article_id']][occurrence['word_id']] += occurrence['positions_count']
             if sum_neighbors: #and len(positions) == occurrence['positions_count']:

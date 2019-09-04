@@ -1,15 +1,16 @@
 from data.models import *
+from django import db
 from django.db.models import Sum, Count
 
 import argparse
 import logging
+import multiprocessing
 import numpy
 import os
 import re
 import shlex
 import subprocess
 import sys
-import threading
 sys.path.append(os.path.dirname(__file__))
 
 import calculators.categories_weight_calculator
@@ -95,8 +96,9 @@ def run(*args):
     if args.method:
         method_name = 'name: %s, %s' % (args.method, method_name)
     logging.info('method_name: %s' % method_name)
+    db.connections.close_all()
     for questions_set in questions_sets:
-        thread = threading.Thread(target=resolve_questions, args=(questions_set, method_name, args.debug_top_items))
+        thread = multiprocessing.Process(target=resolve_questions, args=(questions_set, method_name, args.debug_top_items))
         thread.start()
         threads.append(thread)
 
