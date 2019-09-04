@@ -48,17 +48,20 @@ class TfIdfWeightCalculator(calculators.weight_calculator.WeightCalculator):
         articles_words_weights = defaultdict(defaultdict)
         for item_id in articles_words_count:
             for word_id in articles_words_count[item_id]:
-                if is_title:
-                    tf = articles_words_count[item_id][word_id] / self.articles_title_count[item_id]
-                else:
-                    tf = articles_words_count[item_id][word_id] / self.articles_content_count[item_id]
-                articles_words_weights[item_id][word_id] = tf * words_idf[word_id]
                 if sum_neighbors:
-                    w = 1
+                    words_positions = set()
                     for position in articles_words_positions[item_id][word_id]:
-                        positions = [word_id for (p, word_id) in articles_positions[item_id] if abs(p - position) <= sum_neighbors]
-                        w += len(positions) - 1
-                    articles_words_weights[item_id][word_id] *= w
+                        positions = [p for (p, word_id) in articles_positions[item_id] if abs(p - position) <= sum_neighbors]
+                        words_positions.update(positions)
+                    words_count = len(words_positions)
+                else:
+                    words_count = articles_words_count[item_id][word_id]
+
+                if is_title:
+                    tf = words_count / self.articles_title_count[item_id]
+                else:
+                    tf = words_count / self.articles_content_count[item_id]
+                articles_words_weights[item_id][word_id] = tf * words_idf[word_id]
         return (question_words_weights, articles_words_weights)
 
     def get_weights(self, question, is_title, sum_neighbors):

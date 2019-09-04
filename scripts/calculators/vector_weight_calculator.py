@@ -27,10 +27,7 @@ class VectorWeightCalculator(calculators.weight_calculator.WeightCalculator):
 
     def _vector_upload_positions(self, question, method_name, sum_neighbors, ascending_order, distance_function, question_words_weight, articles_words_weight):
         logging.info('')
-        if sum_neighbors:
-            logging.info(distance_function.__name__ + ' vector neighbors')
-        else:
-            logging.info(distance_function.__name__ + ' vector')
+        logging.info(distance_function.__name__ + (' vector %d neighbors' % sum_neighbors))
 
         articles_weight = {}
         keys = question_words_weight.keys()
@@ -38,10 +35,7 @@ class VectorWeightCalculator(calculators.weight_calculator.WeightCalculator):
             articles_weight[article] = self.__dict_distance(keys, distance_function, question_words_weight, articles_words_weight[article])
 
         positions = self._count_positions(question, articles_words_weight, articles_weight, ascending_order, Article.objects, Word.objects)
-        if sum_neighbors:
-            self._upload_positions(positions, method_name + (", type: %s_vector_neighbours" % distance_function.__name__))
-        else:
-            self._upload_positions(positions, method_name + (", type: %s_vector" % distance_function.__name__))
+        self._upload_positions(positions, method_name + (", type: %s_vector_%02d_neighbours" % (distance_function.__name__, sum_neighbors)))
         return positions
 
 class CosineVectorWeightCalculator(VectorWeightCalculator):
