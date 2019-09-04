@@ -24,6 +24,7 @@ class ReportManager():
         logging.info("process with top answers (%s)" % ', '.join(str(x) for x in args['tops']))
         self.printErrorRate(args)
         self.printQuestions(args)
+        logging.info("finish")
 
     def calculateMethodsQuestionsPositions(self, args):
         methods_questions_positions = defaultdict(lambda: defaultdict(set))

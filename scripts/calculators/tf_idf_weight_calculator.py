@@ -48,35 +48,27 @@ class TfIdfWeightCalculator(calculators.weight_calculator.WeightCalculator):
         articles_words_weights = defaultdict(defaultdict)
         for item_id in articles_words_count:
             for word_id in articles_words_count[item_id]:
-                if sum_neighbors:
-                    w = 0.0
-                    for position in articles_words_positions[item_id][word_id]:
-                        positions = [word_id for (p, word_id) in articles_positions[item_id] if abs(p - position) <= 2]
-                        positions = np.unique(positions)
-                        w += math.pow(1.7, len(positions)) / articles_words_count[item_id][word_id]
-                    articles_words_weights[item_id][word_id] = w * words_idf[word_id]
+                if is_title:
+                    tf = articles_words_count[item_id][word_id] / self.articles_title_count[item_id]
                 else:
-                    if is_title:
-                        tf = articles_words_count[item_id][word_id] / self.articles_title_count[item_id]
-                    else:
-                        tf = articles_words_count[item_id][word_id] / self.articles_content_count[item_id]
-                    articles_words_weights[item_id][word_id] = tf * words_idf[word_id]
+                    tf = articles_words_count[item_id][word_id] / self.articles_content_count[item_id]
+                articles_words_weights[item_id][word_id] = tf * words_idf[word_id]
+                if sum_neighbors:
+                    w = 1
+                    for position in articles_words_positions[item_id][word_id]:
+                        positions = [word_id for (p, word_id) in articles_positions[item_id] if abs(p - position) <= sum_neighbors]
+                        w += len(positions) - 1
+                    articles_words_weights[item_id][word_id] *= w
         return (question_words_weights, articles_words_weights)
 
     def get_weights(self, question, is_title, sum_neighbors):
         logging.info('')
-        if sum_neighbors:
-            logging.info('tf-idf neighbors')
-        else:
-            logging.info('tf-idf')
+        logging.info('tf-idf %d neighbors' % sum_neighbors)
 
         (question_words_weights, articles_words_weight) = self.__count_tf_idf(question, is_title, sum_neighbors)
         return (question_words_weights, articles_words_weight, self._count_weights(articles_words_weight, 3))
 
     def upload_positions(self, question, method_name, sum_neighbors, articles_words_weight, articles_weight):
         positions = self._count_positions(question, articles_words_weight, articles_weight, True, Article.objects, Word.objects)
-        if sum_neighbors:
-            self._upload_positions(positions, method_name + ", type: tf_idf")
-        else:
-            self._upload_positions(positions, method_name + ", type: tf_idf_neighbours")
+        self._upload_positions(positions, "%s, type: tf_idf_%02d_neighbours" % (method_name, sum_neighbors))
         return positions
