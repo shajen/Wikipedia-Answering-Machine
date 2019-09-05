@@ -26,7 +26,7 @@ class TfIdfWeightCalculator(calculators.weight_calculator.WeightCalculator):
             base_form_to_id[word['base_form']] = word['id']
         return base_form_to_id
 
-    def __count_tf_idf(self, question, is_title, sum_neighbors):
+    def prepare(self, question, is_title):
         question_words_base_form_to_id = self.__parse_question(question)
         question_words_changed_form_to_base_form = {}
         for word in Word.objects.filter(base_form__in=question_words_base_form_to_id.keys(), is_stop_word=False).values('id', 'base_form'):
@@ -37,64 +37,62 @@ class TfIdfWeightCalculator(calculators.weight_calculator.WeightCalculator):
             words_idf[word] = math.log(Question.objects.count() / self.questions_words_count[word])
 
         logging.debug('question words weights')
-        question_words_weights = {}
+        self.question_words_weights = {}
         for word in set(question_words_changed_form_to_base_form.values()):
             try:
                 tf = 1.0 / len(set(question_words_changed_form_to_base_form.values()))
-                question_words_weights[word] = tf * words_idf[word]
-                logging.debug(' - %-40s %.6f (%3d)' % (Word.objects.get(id=word), question_words_weights[word], self.questions_words_count[word]))
+                self.question_words_weights[word] = tf * words_idf[word]
+                logging.debug(' - %-40s %.6f (%3d)' % (Word.objects.get(id=word), self.question_words_weights[word], self.questions_words_count[word]))
             except:
                 pass
 
-        articles_words_count = defaultdict(lambda: defaultdict(lambda: 0))
-        articles_words_positions = defaultdict(defaultdict)
-        articles_positions = defaultdict(list)
-        if sum_neighbors:
-            occurrences = Occurrence.objects.filter(word_id__in=question_words_changed_form_to_base_form.keys(), is_title=is_title).values('article_id', 'word_id', 'positions_count', 'positions')
-        else:
-            occurrences = Occurrence.objects.filter(word_id__in=question_words_changed_form_to_base_form.keys(), is_title=is_title).values('article_id', 'word_id', 'positions_count')
+        self.articles_words_count = defaultdict(lambda: defaultdict(lambda: 0))
+        self.articles_words_positions = defaultdict(defaultdict)
+        self.articles_positions = defaultdict(list)
+        occurrences = Occurrence.objects.filter(word_id__in=question_words_changed_form_to_base_form.keys(), is_title=is_title).values('article_id', 'word_id', 'positions_count', 'positions')
         for occurrence in occurrences:
             base_form_id = question_words_changed_form_to_base_form[occurrence['word_id']]
-            articles_words_count[occurrence['article_id']][base_form_id] += occurrence['positions_count']
-            if sum_neighbors: #and len(positions) == occurrence['positions_count']:
-                positions = [int(p) for p in occurrence['positions'].strip().split(',') if p]
-                articles_words_positions[occurrence['article_id']][base_form_id] = positions
-                articles_positions[occurrence['article_id']].extend([(p, base_form_id) for p in positions])
+            self.articles_words_count[occurrence['article_id']][base_form_id] += occurrence['positions_count']
+            #if len(positions) == occurrence['positions_count']:
+            positions = [int(p) for p in occurrence['positions'].strip().split(',') if p]
+            self.articles_words_positions[occurrence['article_id']][base_form_id] = positions
+            self.articles_positions[occurrence['article_id']].extend([(p, base_form_id) for p in positions])
 
         words_articles_count = defaultdict(lambda: 0)
-        for item_id in articles_words_count:
-            for word_id in articles_words_count[item_id]:
+        for item_id in self.articles_words_count:
+            for word_id in self.articles_words_count[item_id]:
                 words_articles_count[word_id] += 1
 
-        words_idf = {}
+        self.words_idf = {}
         for word_id in words_articles_count:
-            words_idf[word_id] = math.log(len(self.articles_title_count) / words_articles_count[word_id])
+            self.words_idf[word_id] = math.log(len(self.articles_title_count) / words_articles_count[word_id])
 
+    def __count_tf_idf(self, question, is_title, sum_neighbors):
         articles_words_weights = defaultdict(defaultdict)
-        for item_id in articles_words_count:
-            for word_id in articles_words_count[item_id]:
+        for item_id in self.articles_words_count:
+            for word_id in self.articles_words_count[item_id]:
                 if sum_neighbors:
                     words_positions = set()
-                    for position in articles_words_positions[item_id][word_id]:
-                        positions = [p for (p, word_id) in articles_positions[item_id] if abs(p - position) <= sum_neighbors]
+                    for position in self.articles_words_positions[item_id][word_id]:
+                        positions = [p for (p, word_id) in self.articles_positions[item_id] if abs(p - position) <= sum_neighbors]
                         words_positions.update(positions)
                     words_count = len(words_positions)
                 else:
-                    words_count = articles_words_count[item_id][word_id]
+                    words_count = self.articles_words_count[item_id][word_id]
 
                 if is_title:
                     tf = words_count / self.articles_title_count[item_id]
                 else:
                     tf = words_count / self.articles_content_count[item_id]
-                articles_words_weights[item_id][word_id] = tf * words_idf[word_id]
-        return (question_words_weights, articles_words_weights)
+                articles_words_weights[item_id][word_id] = tf * self.words_idf[word_id]
+        return articles_words_weights
 
     def get_weights(self, question, is_title, sum_neighbors):
         logging.info('')
         logging.info('tf-idf %d neighbors' % sum_neighbors)
 
-        (question_words_weights, articles_words_weight) = self.__count_tf_idf(question, is_title, sum_neighbors)
-        return (question_words_weights, articles_words_weight, self._count_weights(articles_words_weight, 3))
+        articles_words_weight = self.__count_tf_idf(question, is_title, sum_neighbors)
+        return (self.question_words_weights, articles_words_weight, self._count_weights(articles_words_weight, 3))
 
     def upload_positions(self, question, method_name, sum_neighbors, articles_words_weight, articles_weight):
         positions = self._count_positions(question, articles_words_weight, articles_weight, True, Article.objects, Word.objects)
