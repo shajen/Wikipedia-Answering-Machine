@@ -19,6 +19,13 @@ class WeightCalculator:
             self.articles_title[article['id']] = article['title']
         logging.info('finish reading')
 
+    def _normalise(self, data):
+        if data:
+            max_weight = max(data.values())
+            if max_weight > 0:
+                data = {k: v / max_weight for k, v in data.items()}
+        return data
+
     def _print_item(self, item_id, items_weight, items_id_weights, item_objects, id_objects):
         try:
             weight = items_weight[item_id]
@@ -44,9 +51,7 @@ class WeightCalculator:
         for item_id in items_id_weights:
             count = len(items_id_weights[item_id])
             items_weight[item_id] = math.pow(count, power_factor) * reduce((lambda x, y: x + y), items_id_weights[item_id].values(), 0.0)
-        if items_weight:
-            max_weight = max(items_weight.values())
-            items_weight = {k: v / max_weight for k, v in items_weight.items()}
+        items_weight = self._normalise(items_weight)
         return items_weight
 
     def _count_positions(self, question, items_id_weights, items_weight, ascending_order, item_objects, id_objects):
