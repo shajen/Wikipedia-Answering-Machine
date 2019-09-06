@@ -96,5 +96,5 @@ class TfIdfWeightCalculator(calculators.weight_calculator.WeightCalculator):
 
     def upload_positions(self, question, method_name, sum_neighbors, articles_words_weight, articles_weight):
         positions = self._count_positions(question, articles_words_weight, articles_weight, True, Article.objects, Word.objects)
-        self._upload_positions(positions, "%s, type: tf_idf_%02d_neighbours" % (method_name, sum_neighbors))
+        self._upload_positions(positions, "%s, type: tf_idf_%03d_neighbors" % (method_name, sum_neighbors))
         return positions

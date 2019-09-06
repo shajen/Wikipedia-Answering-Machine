@@ -40,7 +40,7 @@ class VectorWeightCalculator(calculators.weight_calculator.WeightCalculator):
         logging.info('finished weights calculations')
 
         positions = self._count_positions(question, articles_words_weight, articles_weight, ascending_order, Article.objects, Word.objects)
-        self._upload_positions(positions, method_name + (", type: %s_vector_%02d_neighbours" % (distance_function, sum_neighbors)))
+        self._upload_positions(positions, method_name + (", type: %s_vector_%03d_neighbors" % (distance_function, sum_neighbors)))
         return positions
 
 class CosineVectorWeightCalculator(VectorWeightCalculator):
