@@ -95,16 +95,16 @@ class TfIdfWeightCalculator(calculators.weight_calculator.WeightCalculator):
                 if weight > max_weight:
                     max_weight = weight
                     for word_id, count in counter.items():
-                        articles_words_weights[item_id][word_id = count / (sum_neighbors + 1) * self.words_idf[word_id]
+                        articles_words_weights[item_id][word_id] = count / (sum_neighbors + 1) * self.words_idf[word_id]
                     articles_weight[item_id] = weight
 
         return (articles_words_weights, articles_weight)
 
-    def get_weights(self, question, is_title, sum_neighbors):
+    def get_weights(self, question, is_title, sum_neighbors, minimal_word_idf_weight, power_factor):
         logging.info('')
         logging.info('tf-idf %d neighbors' % sum_neighbors)
 
-        (articles_words_weight, articles_weight) = self.__count_tf_idf(question, is_title, sum_neighbors, 0.0, 0)
+        (articles_words_weight, articles_weight) = self.__count_tf_idf(question, is_title, sum_neighbors, minimal_word_idf_weight, power_factor)
         return (self.question_words_weights, articles_words_weight, articles_weight)
 
     def upload_positions(self, question, method_name, sum_neighbors, articles_words_weight, articles_weight):

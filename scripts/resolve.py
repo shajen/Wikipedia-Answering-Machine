@@ -38,7 +38,7 @@ def update_articles_words_count(is_title):
             logging.warning(article)
     logging.info('finished update_articles_words_count')
 
-def resolve_questions(questions, method_name, debug_top_items):
+def resolve_questions(questions, method_name, debug_top_items, minimal_word_idf_weight, power_factor):
     tf_idf_wc = calculators.tf_idf_weight_calculator.TfIdfWeightCalculator(debug_top_items)
     # cosine_wc = calculators.vector_weight_calculator.CosineVectorWeightCalculator(debug_top_items)
     # euclidean_wc = calculators.vector_weight_calculator.EuclideanVectorWeightCalculator(debug_top_items)
@@ -47,7 +47,7 @@ def resolve_questions(questions, method_name, debug_top_items):
     # categories_wc = calculators.categories_weight_calculator.CategoriesWeightCalculator(debug_top_items)
 
     def tf_idf_upload_positions(sum_neighbors):
-        (question_words_weight, articles_words_weight, articles_weight) = tf_idf_wc.get_weights(q, False, sum_neighbors)
+        (question_words_weight, articles_words_weight, articles_weight) = tf_idf_wc.get_weights(q, False, sum_neighbors, minimal_word_idf_weight, power_factor)
         tf_idf_wc.upload_positions(q, method_name, sum_neighbors, articles_words_weight, articles_weight)
         # cosine_wc.upload_positions(q, method_name, sum_neighbors, question_words_weight, articles_words_weight)
         # euclidean_wc.upload_positions(q, method_name, sum_neighbors, question_words_weight, articles_words_weight)
@@ -73,6 +73,8 @@ def run(*args):
     parser.add_argument("-t", "--threads", help="threads", type=int, default=1, choices=range(1, 33), metavar="int")
     parser.add_argument('-m', '--method', help="method name to make unique in database", type=str, default='', metavar="method")
     parser.add_argument("-dti", "--debug_top_items", help="print top n items in debug", type=int, default=3, metavar="int")
+    parser.add_argument("-mwiw", "--minimal_word_idf_weight", help="use only words with idf weight above", type=float, default=0.0, metavar="float")
+    parser.add_argument("-pf", "--power_factor", help="use to sum words weight in count article weight", type=float, default=0.0, metavar="float")
     parser.add_argument('-v', '--verbose', action='count', default=0)
     args = parser.parse_args(args)
 
@@ -80,6 +82,8 @@ def run(*args):
     logging.info('start')
     logging.info('threads: %d' % args.threads)
     logging.info('debug_top_items: %d' % args.debug_top_items)
+    logging.info('minimal_word_idf_weight: %.2f' % args.minimal_word_idf_weight)
+    logging.info('power_factor: %.2f' % args.power_factor)
     #update_articles_words_count(True)
     #update_articles_words_count(False)
 
@@ -89,13 +93,13 @@ def run(*args):
     dirPath = os.path.dirname(os.path.realpath(__file__))
     commit_hash = subprocess.check_output(['git', '-C', dirPath, 'rev-parse', '--short', 'HEAD']).decode('ascii').strip()
     commit_datetime = subprocess.check_output(['git', '-C', dirPath, 'log', '-1', '--format=%at']).decode('ascii').strip()
-    method_name = 'date: %s, git: %s' % (commit_datetime, commit_hash)
+    method_name = 'date: %s, git: %s, mwiw: %.2f, pf: %.2f' % (commit_datetime, commit_hash, args.minimal_word_idf_weight, args.power_factor)
     if args.method:
         method_name = 'name: %s, %s' % (args.method, method_name)
     logging.info('method_name: %s' % method_name)
     db.connections.close_all()
     for questions_set in questions_sets:
-        thread = multiprocessing.Process(target=resolve_questions, args=(questions_set, method_name, args.debug_top_items))
+        thread = multiprocessing.Process(target=resolve_questions, args=(questions_set, method_name, args.debug_top_items, args.minimal_word_idf_weight, args.power_factor))
         thread.start()
         threads.append(thread)
 
