@@ -1,5 +1,6 @@
-from collections import defaultdict
+from collections import defaultdict, deque, Counter
 from data.models import *
+from functools import reduce
 import calculators.weight_calculator
 import logging
 import math
@@ -67,32 +68,44 @@ class TfIdfWeightCalculator(calculators.weight_calculator.WeightCalculator):
         for word_id in words_articles_count:
             self.words_idf[word_id] = math.log(len(self.articles_title_count) / words_articles_count[word_id])
 
-    def __count_tf_idf(self, question, is_title, sum_neighbors):
+    def __count_tf_idf(self, question, is_title, sum_neighbors, minimal_word_idf, power_factor):
         articles_words_weights = defaultdict(defaultdict)
-        for item_id in self.articles_words_count:
-            for word_id in self.articles_words_count[item_id]:
-                if sum_neighbors:
-                    words_positions = set()
-                    for position in self.articles_words_positions[item_id][word_id]:
-                        positions = [p for (p, word_id) in self.articles_positions[item_id] if abs(p - position) <= sum_neighbors]
-                        words_positions.update(positions)
-                    words_count = len(words_positions)
-                else:
-                    words_count = self.articles_words_count[item_id][word_id]
+        articles_weight = defaultdict()
 
-                if is_title:
-                    tf = words_count / self.articles_title_count[item_id]
-                else:
-                    tf = words_count / self.articles_content_count[item_id]
-                articles_words_weights[item_id][word_id] = tf * self.words_idf[word_id]
-        return articles_words_weights
+        for item_id in self.articles_words_count:
+            max_weight = 0.0
+            counter = defaultdict(lambda: 0)
+            words_positions = sorted(self.articles_positions[item_id], key=lambda d: d[0])
+            words_positions = filter(lambda data: self.words_idf[data[1]] > minimal_word_idf, words_positions)
+            current_words = deque()
+            for data in words_positions:
+                current_words.append(data)
+                counter[data[1]] += 1
+                while current_words[0][0] + sum_neighbors < current_words[-1][0]:
+                    pop_data = current_words.popleft()
+                    counter[pop_data[1]] -= 1
+                    if counter[pop_data[1]] == 0:
+                        del counter[pop_data[1]]
+
+                weight = 0.0
+                for word_id, count in counter.items():
+                    weight += count / (sum_neighbors + 1) * self.words_idf[word_id]
+
+                weight *= math.pow(len(counter), power_factor)
+                if weight > max_weight:
+                    max_weight = weight
+                    for word_id, count in counter.items():
+                        articles_words_weights[item_id][word_id = count / (sum_neighbors + 1) * self.words_idf[word_id]
+                    articles_weight[item_id] = weight
+
+        return (articles_words_weights, articles_weight)
 
     def get_weights(self, question, is_title, sum_neighbors):
         logging.info('')
         logging.info('tf-idf %d neighbors' % sum_neighbors)
 
-        articles_words_weight = self.__count_tf_idf(question, is_title, sum_neighbors)
-        return (self.question_words_weights, articles_words_weight, self._count_weights(articles_words_weight, 3))
+        (articles_words_weight, articles_weight) = self.__count_tf_idf(question, is_title, sum_neighbors, 0.0, 0)
+        return (self.question_words_weights, articles_words_weight, articles_weight)
 
     def upload_positions(self, question, method_name, sum_neighbors, articles_words_weight, articles_weight):
         positions = self._count_positions(question, articles_words_weight, articles_weight, True, Article.objects, Word.objects)
