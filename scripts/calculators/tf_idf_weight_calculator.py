@@ -59,6 +59,9 @@ class TfIdfWeightCalculator(calculators.weight_calculator.WeightCalculator):
             self.articles_words_positions[occurrence['article_id']][base_form_id] = positions
             self.articles_positions[occurrence['article_id']].extend([(p, base_form_id) for p in positions])
 
+        for item_id in self.articles_positions:
+            self.articles_positions[item_id].sort(key=lambda d: d[0])
+
         words_articles_count = defaultdict(lambda: 0)
         for item_id in self.articles_words_count:
             for word_id in self.articles_words_count[item_id]:
@@ -75,8 +78,7 @@ class TfIdfWeightCalculator(calculators.weight_calculator.WeightCalculator):
         for item_id in self.articles_words_count:
             max_weight = 0.0
             counter = defaultdict(lambda: 0)
-            words_positions = sorted(self.articles_positions[item_id], key=lambda d: d[0])
-            words_positions = filter(lambda data: self.words_idf[data[1]] > minimal_word_idf, words_positions)
+            words_positions = filter(lambda data: self.words_idf[data[1]] > minimal_word_idf, self.articles_positions[item_id])
             current_words = deque()
             for data in words_positions:
                 current_words.append(data)
