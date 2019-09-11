@@ -63,6 +63,39 @@ def resolve_questions(questions, method_name, debug_top_items, minimal_word_idf_
 
         tf_idf_wc.prepare(q, False)
         tf_idf_upload_positions(0)
+        tf_idf_upload_positions(1)
+        tf_idf_upload_positions(3)
+        tf_idf_upload_positions(5)
+        tf_idf_upload_positions(10)
+        tf_idf_upload_positions(15)
+        tf_idf_upload_positions(20)
+        tf_idf_upload_positions(30)
+        tf_idf_upload_positions(50)
+        tf_idf_upload_positions(100)
+        tf_idf_upload_positions(150)
+        tf_idf_upload_positions(200)
+        tf_idf_upload_positions(250)
+        tf_idf_upload_positions(500)
+
+def start(questions, threads, method_name, debug_top_items, minimal_word_idf_weight, power_factor):
+    questions_sets = numpy.array_split(questions, threads)
+    logging.info('start')
+    logging.info('threads: %d' % threads)
+    logging.info('debug_top_items: %d' % debug_top_items)
+    logging.info('minimal_word_idf_weight: %.2f' % minimal_word_idf_weight)
+    logging.info('power_factor: %.2f' % power_factor)
+    logging.info('method_name: %s' % method_name)
+    db.connections.close_all()
+
+    threads = []
+    for questions_set in questions_sets:
+        thread = multiprocessing.Process(target=resolve_questions, args=(questions_set, method_name, debug_top_items, minimal_word_idf_weight, power_factor))
+        thread.start()
+        threads.append(thread)
+
+    for thread in threads:
+        thread.join()
+    logging.info('finish')
 
 def run(*args):
     try:
@@ -79,30 +112,14 @@ def run(*args):
     args = parser.parse_args(args)
 
     tools.logger.configLogger(args.verbose)
-    logging.info('start')
-    logging.info('threads: %d' % args.threads)
-    logging.info('debug_top_items: %d' % args.debug_top_items)
-    logging.info('minimal_word_idf_weight: %.2f' % args.minimal_word_idf_weight)
-    logging.info('power_factor: %.2f' % args.power_factor)
     #update_articles_words_count(True)
     #update_articles_words_count(False)
 
-    threads = []
     questions = list(Question.objects.all())
-    questions_sets = numpy.array_split(questions, args.threads)
     dirPath = os.path.dirname(os.path.realpath(__file__))
     commit_hash = subprocess.check_output(['git', '-C', dirPath, 'rev-parse', '--short', 'HEAD']).decode('ascii').strip()
     commit_datetime = subprocess.check_output(['git', '-C', dirPath, 'log', '-1', '--format=%at']).decode('ascii').strip()
     method_name = 'date: %s, git: %s, mwiw: %.2f, pf: %.2f' % (commit_datetime, commit_hash, args.minimal_word_idf_weight, args.power_factor)
     if args.method:
         method_name = 'name: %s, %s' % (args.method, method_name)
-    logging.info('method_name: %s' % method_name)
-    db.connections.close_all()
-    for questions_set in questions_sets:
-        thread = multiprocessing.Process(target=resolve_questions, args=(questions_set, method_name, args.debug_top_items, args.minimal_word_idf_weight, args.power_factor))
-        thread.start()
-        threads.append(thread)
-
-    for thread in threads:
-        thread.join()
-    logging.info('finish')
+    start(questions, args.threads, method_name, args.debug_top_items, args.minimal_word_idf_weight, args.power_factor)
