@@ -5,8 +5,8 @@ from django.db.models import Sum, Count
 import argparse
 import logging
 import multiprocessing
-import numpy
 import os
+import queue
 import re
 import shlex
 import subprocess
@@ -38,7 +38,7 @@ def update_articles_words_count(is_title):
             logging.warning(article)
     logging.info('finished update_articles_words_count')
 
-def resolve_questions(questions, method_name, debug_top_items, minimal_word_idf_weight, power_factor):
+def resolve_questions(questions_queue, method_name, debug_top_items, minimal_word_idf_weight, power_factor):
     tf_idf_wc = calculators.tf_idf_weight_calculator.TfIdfWeightCalculator(debug_top_items)
     # cosine_wc = calculators.vector_weight_calculator.CosineVectorWeightCalculator(debug_top_items)
     # euclidean_wc = calculators.vector_weight_calculator.EuclideanVectorWeightCalculator(debug_top_items)
@@ -55,41 +55,48 @@ def resolve_questions(questions, method_name, debug_top_items, minimal_word_idf_
         # links_wc.upload_positions(q, method_name, articles_weight)
         # categories_wc.upload_positions(q, method_name, articles_weight)
 
-    for q in questions:
-        logging.info('')
-        logging.info('*' * 80)
-        logging.info('processing question:')
-        logging.info('%d: %s' % (q.id, q.name))
+    while True:
+        try:
+            q = questions_queue.get(timeout=1)
+            logging.info('')
+            logging.info('*' * 80)
+            logging.info('processing question:')
+            logging.info('%d: %s' % (q.id, q.name))
 
-        tf_idf_wc.prepare(q, False)
-        tf_idf_upload_positions(0)
-        tf_idf_upload_positions(1)
-        tf_idf_upload_positions(3)
-        tf_idf_upload_positions(5)
-        tf_idf_upload_positions(10)
-        tf_idf_upload_positions(15)
-        tf_idf_upload_positions(20)
-        tf_idf_upload_positions(30)
-        tf_idf_upload_positions(50)
-        tf_idf_upload_positions(100)
-        tf_idf_upload_positions(150)
-        tf_idf_upload_positions(200)
-        tf_idf_upload_positions(250)
-        tf_idf_upload_positions(500)
+            tf_idf_wc.prepare(q, False)
+            tf_idf_upload_positions(0)
+            tf_idf_upload_positions(1)
+            tf_idf_upload_positions(3)
+            tf_idf_upload_positions(5)
+            tf_idf_upload_positions(10)
+            tf_idf_upload_positions(15)
+            tf_idf_upload_positions(20)
+            tf_idf_upload_positions(30)
+            tf_idf_upload_positions(50)
+            tf_idf_upload_positions(100)
+            tf_idf_upload_positions(150)
+            tf_idf_upload_positions(200)
+            tf_idf_upload_positions(250)
+            tf_idf_upload_positions(500)
+        except queue.Empty:
+            break
 
-def start(questions, threads, method_name, debug_top_items, minimal_word_idf_weight, power_factor):
-    questions_sets = numpy.array_split(questions, threads)
+def start(questions, num_threads, method_name, debug_top_items, minimal_word_idf_weight, power_factor):
     logging.info('start')
-    logging.info('threads: %d' % threads)
+    logging.info('threads: %d' % num_threads)
     logging.info('debug_top_items: %d' % debug_top_items)
     logging.info('minimal_word_idf_weight: %.2f' % minimal_word_idf_weight)
     logging.info('power_factor: %.2f' % power_factor)
     logging.info('method_name: %s' % method_name)
     db.connections.close_all()
 
+    questions_queue = multiprocessing.Queue()
+    for question in questions:
+        questions_queue.put(question)
+
     threads = []
-    for questions_set in questions_sets:
-        thread = multiprocessing.Process(target=resolve_questions, args=(questions_set, method_name, debug_top_items, minimal_word_idf_weight, power_factor))
+    for i in range(num_threads):
+        thread = multiprocessing.Process(target=resolve_questions, args=(questions_queue, method_name, debug_top_items, minimal_word_idf_weight, power_factor))
         thread.start()
         threads.append(thread)
 
