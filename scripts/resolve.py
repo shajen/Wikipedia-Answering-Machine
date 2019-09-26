@@ -46,6 +46,8 @@ def resolve_questions(questions_queue, method_name, debug_top_items, minimal_wor
     # links_wc = calculators.links_weight_calculator.LinksWeightCalculator(debug_top_items)
     # categories_wc = calculators.categories_weight_calculator.CategoriesWeightCalculator(debug_top_items)
 
+    methods = Method.objects.filter(name__istartswith=method_name)
+
     def tf_idf_upload_positions(sum_neighbors):
         (question_words_weight, articles_words_weight, articles_weight) = tf_idf_wc.get_weights(q, False, sum_neighbors, minimal_word_idf_weight, power_factor)
         tf_idf_wc.upload_positions(q, method_name, sum_neighbors, articles_words_weight, articles_weight)
@@ -63,21 +65,24 @@ def resolve_questions(questions_queue, method_name, debug_top_items, minimal_wor
             logging.info('processing question:')
             logging.info('%d: %s' % (q.id, q.name))
 
-            tf_idf_wc.prepare(q, False)
-            tf_idf_upload_positions(0)
-            tf_idf_upload_positions(1)
-            tf_idf_upload_positions(3)
-            tf_idf_upload_positions(5)
-            tf_idf_upload_positions(10)
-            tf_idf_upload_positions(15)
-            tf_idf_upload_positions(20)
-            tf_idf_upload_positions(30)
-            tf_idf_upload_positions(50)
-            tf_idf_upload_positions(100)
-            tf_idf_upload_positions(150)
-            tf_idf_upload_positions(200)
-            tf_idf_upload_positions(250)
-            tf_idf_upload_positions(500)
+            neighbors = [0, 1, 3, 5, 10, 15, 20, 30, 50, 100, 150, 200, 250, 500]
+            # neighbors = [5, 10, 20, 50, 100, 150, 200, 250, 500]
+
+            answers = q.answer_set.all()
+            current_solutions_count = Solution.objects.filter(method__in=methods, answer__in=answers).all().count()
+            expected_solutions_count = 4 * len(neighbors) * len(answers)
+
+            if current_solutions_count != expected_solutions_count and current_solutions_count > 0:
+                logging.info('clearing')
+                Solution.objects.filter(method__in=methods, answer__in=answers).delete()
+                current_solutions_count = 0
+
+            if current_solutions_count == expected_solutions_count:
+                logging.info('skipping')
+            else:
+                tf_idf_wc.prepare(q, False)
+                for n in neighbors:
+                    tf_idf_upload_positions(n)
         except queue.Empty:
             break
 
