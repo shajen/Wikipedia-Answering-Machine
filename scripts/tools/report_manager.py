@@ -29,9 +29,9 @@ class ReportManager():
     def calculateMethodsQuestionsPositions(self, args):
         methods_questions_positions = defaultdict(lambda: defaultdict(set))
         question_id = 0
-        for solution in Solution.objects.all():
-            position = solution.position
-            method_id = solution.method_id
+        for solution in Solution.objects.values('position', 'method_id'):#$all():
+            position = solution['position']
+            method_id = solution['method_id']
             # question_id = solution.answer.question.id
             question_id += 1 #just for acceleration
             if not args['showNotFound'] and position == 10**9:
@@ -41,7 +41,7 @@ class ReportManager():
 
     def printErrorRate(self, args):
         methods_questions_positions = self.calculateMethodsQuestionsPositions(args)
-        LEN = 60
+        LEN = 120
         sys.stdout.write(' ' * LEN + '     #')
         for t in args['tops']:
             sys.stdout.write('  %6d' % t)
