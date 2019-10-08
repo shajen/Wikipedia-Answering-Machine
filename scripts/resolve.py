@@ -16,8 +16,7 @@ sys.path.append(os.path.dirname(__file__))
 import calculators.categories_weight_calculator
 import calculators.links_weight_calculator
 import calculators.tf_idf_weight_calculator
-import calculators.vector_weight_calculator
-import calculators.weight_calculator
+import calculators.weight_comparator
 import tools.logger
 
 def update_articles_words_count(is_title):
@@ -38,22 +37,24 @@ def update_articles_words_count(is_title):
             logging.warning(article)
     logging.info('finished update_articles_words_count')
 
-def resolve_questions(questions_queue, method_name, debug_top_items, minimal_word_idf_weight, power_factor):
-    tf_idf_wc = calculators.tf_idf_weight_calculator.TfIdfWeightCalculator(debug_top_items)
-    # cosine_wc = calculators.vector_weight_calculator.CosineVectorWeightCalculator(debug_top_items)
-    # euclidean_wc = calculators.vector_weight_calculator.EuclideanVectorWeightCalculator(debug_top_items)
-    # city_wc = calculators.vector_weight_calculator.CityblockVectorWeightCalculator(debug_top_items)
+def resolve_questions(questions_queue, method_name, debug_top_items, neighbors, minimal_word_idf_weights, power_factors):
+    tf_idf_calculator = calculators.tf_idf_weight_calculator.TfIdfWeightCalculator(debug_top_items)
     # links_wc = calculators.links_weight_calculator.LinksWeightCalculator(debug_top_items)
     # categories_wc = calculators.categories_weight_calculator.CategoriesWeightCalculator(debug_top_items)
 
     methods = Method.objects.filter(name__istartswith=method_name)
 
     def tf_idf_upload_positions(sum_neighbors):
-        (question_words_weight, articles_words_weight, articles_weight) = tf_idf_wc.get_weights(q, False, sum_neighbors, minimal_word_idf_weight, power_factor)
-        tf_idf_wc.upload_positions(q, method_name, sum_neighbors, articles_words_weight, articles_weight)
-        # cosine_wc.upload_positions(q, method_name, sum_neighbors, question_words_weight, articles_words_weight)
-        # euclidean_wc.upload_positions(q, method_name, sum_neighbors, question_words_weight, articles_words_weight)
-        # city_wc.upload_positions(q, method_name, sum_neighbors, question_words_weight, articles_words_weight)
+        for minimal_word_idf_weight in minimal_word_idf_weights:
+            comparators = []
+            m = '%s, mwiw: %.2f' % (method_name, minimal_word_idf_weight)
+            for pf in power_factors:
+                comparators.append(calculators.weight_comparator.TfIdfWeightComparator(m, sum_neighbors, pf))
+            comparators.append(calculators.weight_comparator.CosineWeightComparator(m, sum_neighbors))
+            comparators.append(calculators.weight_comparator.EuclideanWeightComparator(m, sum_neighbors))
+            comparators.append(calculators.weight_comparator.CityblockWeightComparator(m, sum_neighbors))
+
+            tf_idf_calculator.calculate(q, sum_neighbors, minimal_word_idf_weight, comparators)
         # links_wc.upload_positions(q, method_name, articles_weight)
         # categories_wc.upload_positions(q, method_name, articles_weight)
 
@@ -65,12 +66,9 @@ def resolve_questions(questions_queue, method_name, debug_top_items, minimal_wor
             logging.info('processing question:')
             logging.info('%d: %s' % (q.id, q.name))
 
-            neighbors = [0, 1, 3, 5, 10, 15, 20, 30, 50, 100, 150, 200, 250, 500]
-            # neighbors = [5, 10, 20, 50, 100, 150, 200, 250, 500]
-
             answers = q.answer_set.all()
             current_solutions_count = Solution.objects.filter(method__in=methods, answer__in=answers).all().count()
-            expected_solutions_count = 4 * len(neighbors) * len(answers)
+            expected_solutions_count = (3 + len(power_factors)) * len(minimal_word_idf_weights) * len(neighbors) * len(answers)
 
             if current_solutions_count != expected_solutions_count and current_solutions_count > 0:
                 logging.info('clearing')
@@ -80,19 +78,20 @@ def resolve_questions(questions_queue, method_name, debug_top_items, minimal_wor
             if current_solutions_count == expected_solutions_count:
                 logging.info('skipping')
             else:
-                tf_idf_wc.prepare(q, False)
+                tf_idf_calculator.prepare(q, False)
                 for n in neighbors:
                     tf_idf_upload_positions(n)
         except queue.Empty:
             break
 
-def start(questions, num_threads, method_name, debug_top_items, minimal_word_idf_weight, power_factor):
+def start(questions, num_threads, method_name, debug_top_items, neighbors, minimal_word_idf_weights, power_factors):
     logging.info('start')
     logging.info('threads: %d' % num_threads)
     logging.info('debug_top_items: %d' % debug_top_items)
-    logging.info('minimal_word_idf_weight: %.2f' % minimal_word_idf_weight)
-    logging.info('power_factor: %.2f' % power_factor)
     logging.info('method_name: %s' % method_name)
+    logging.info('neighbors: %s' % neighbors)
+    logging.info('minimal_word_idf_weights: %s' % minimal_word_idf_weights)
+    logging.info('power_factors: %s' % power_factors)
     db.connections.close_all()
 
     questions_queue = multiprocessing.Queue()
@@ -101,7 +100,7 @@ def start(questions, num_threads, method_name, debug_top_items, minimal_word_idf
 
     threads = []
     for i in range(num_threads):
-        thread = multiprocessing.Process(target=resolve_questions, args=(questions_queue, method_name, debug_top_items, minimal_word_idf_weight, power_factor))
+        thread = multiprocessing.Process(target=resolve_questions, args=(questions_queue, method_name, debug_top_items, neighbors, minimal_word_idf_weights, power_factors))
         thread.start()
         threads.append(thread)
 
@@ -131,7 +130,13 @@ def run(*args):
     dirPath = os.path.dirname(os.path.realpath(__file__))
     commit_hash = subprocess.check_output(['git', '-C', dirPath, 'rev-parse', '--short', 'HEAD']).decode('ascii').strip()
     commit_datetime = subprocess.check_output(['git', '-C', dirPath, 'log', '-1', '--format=%at']).decode('ascii').strip()
-    method_name = 'date: %s, git: %s, mwiw: %.2f, pf: %.2f' % (commit_datetime, commit_hash, args.minimal_word_idf_weight, args.power_factor)
+    method_name = 'date: %s, git: %s' % (commit_datetime, commit_hash)
     if args.method:
         method_name = 'name: %s, %s' % (args.method, method_name)
-    start(questions, args.threads, method_name, args.debug_top_items, args.minimal_word_idf_weight, args.power_factor)
+    # neighbors = [0, 1, 3, 5, 10, 15, 20, 30, 50, 100, 150, 200, 250, 500]
+    neighbors = [5, 10, 20, 50, 100, 150, 200, 250, 500]
+    minimal_word_idf_weights = [args.minimal_word_idf_weight]
+    # minimal_word_idf_weights = [0.0, 0.25, 0.5, 0.75, 1.0, 1,5]
+    power_factors = [args.power_factor]
+    # power_factors = [1.0, 2.0, 3.0, 4.0]
+    start(questions, args.threads, method_name, args.debug_top_items, neighbors, minimal_word_idf_weights, power_factors)
