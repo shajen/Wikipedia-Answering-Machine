@@ -48,7 +48,7 @@ class Category(models.Model):
 
     def __str__(self):
         return self.title
-        
+
 class Article(models.Model):
     title = models.CharField(max_length=255, unique=True)
     links = models.ManyToManyField(
@@ -109,12 +109,15 @@ class Solution(models.Model):
 
 class Word(models.Model):
     base_form = models.CharField(max_length=100, db_index=True)
-    changed_form = models.CharField(max_length=100, unique=True)
+    changed_form = models.CharField(max_length=100, db_index=True)
     is_stop_word = models.BooleanField(default=False, db_index=True)
     added_date = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return '%s (%s)' % (self.changed_form, self.base_form)
+
+    class Meta:
+        unique_together = ('base_form', 'changed_form',)
 
 class Occurrence(models.Model):
     article = models.ForeignKey(Article, on_delete=models.CASCADE)
