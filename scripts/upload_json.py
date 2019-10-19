@@ -1,5 +1,5 @@
 from data.models import *
-import multiprocess
+import multiprocessing
 
 import argparse
 import json
@@ -8,6 +8,7 @@ import os
 import shlex
 import sys
 import smart_open
+from django import db
 from functools import reduce, partial
 
 sys.path.append(os.path.dirname(__file__))
@@ -43,6 +44,7 @@ def preparse_articles(batch_size, file, category_tag, first_n_lines, pool):
     lines = list(smart_open.open(file, 'r'))
     if first_n_lines > 0:
         lines = lines[:first_n_lines]
+    db.connections.close_all()
     data = pool.map(partial(preparse_article_callback, batch_size, category_tag), lines)
     logging.info('inserting %d words' % reduce(lambda x, y: x + y, [len(w) for (a, c, w) in data]))
     words = []
@@ -138,6 +140,7 @@ def parse_articles(batch_size, file, category_tag, redirect_tag, first_n_lines, 
     lines = list(smart_open.open(file, 'r'))
     if first_n_lines > 0:
         lines = lines[:first_n_lines]
+    db.connections.close_all()
     pool.map(partial(parse_articles_callback, batch_size, category_tag, redirect_tag), lines)
     logging.info('finish')
 
@@ -169,7 +172,7 @@ def run(*args):
     logging.info('batch size: %d' % args.batch_size)
     logging.info('first_n_lines: %d' % args.first_n_lines)
 
-    pool = multiprocess.Pool(args.threads)
+    pool = multiprocessing.Pool(args.threads)
     category_tag = args.category_tag.strip().lower()
     redirect_tag = args.redirect_tag.strip().lower()
     first_n_lines = max(0, args.first_n_lines)
