@@ -66,21 +66,21 @@ class ArticlesParser():
 
 	def parseArticle(self, title, text, links):
 		article = Article.objects.get(title=title)
-		for link in links:
-			if link.startswith(self.category_tag):
-				try:
-					linkedCategory, created = Category.objects.get_or_create(title=link[len(self.category_tag):])
-					article.categories.add(linkedCategory)
-				except:
-					#logging.warning('link category not found source article: %s, target category: %s' % (title, link))
-					pass
-			else:
-				try:
-					linkedArticle = Article.objects.get(title=link)
-					article.links.add(linkedArticle)
-				except:
-					#logging.warning('link article not found source article: %s, target article: %s' % (title, link))
-					pass
+		# for link in links:
+		# 	if link.startswith(self.category_tag):
+		# 		try:
+		# 			linkedCategory, created = Category.objects.get_or_create(title=link[len(self.category_tag):])
+		# 			article.categories.add(linkedCategory)
+		# 		except:
+		# 			#logging.warning('link category not found source article: %s, target category: %s' % (title, link))
+		# 			pass
+		# 	else:
+		# 		try:
+		# 			linkedArticle = Article.objects.get(title=link)
+		# 			article.links.add(linkedArticle)
+		# 		except:
+		# 			#logging.warning('link article not found source article: %s, target article: %s' % (title, link))
+		# 			pass
 		title = self.normaliseText(title)
 		text = self.normaliseText(text)
 		for i in range(10):
@@ -105,11 +105,17 @@ class ArticlesParser():
 	def parseText(self, article, text, isTitle):
 		new_words = []
 		words = re.findall('(\d+(?:\.|,)\d+|\w+|\.)', text)
+		word_to_id = {}
+		for word in Word.objects.filter(changed_form__in=set(words)).values('id', 'changed_form'):
+			word_to_id[word['changed_form']] = word['id']
+
+		found_words = word_to_id.keys()
 		for w in set(words):
-			if len(w) > 1:
+			if len(w) > 1 and w not in found_words:
 				new_words.append(Word(base_form=w, changed_form=w))
-		Word.objects.bulk_create(new_words, ignore_conflicts=True, batch_size=self.batch_size)
-		created_words = Word.objects.filter(changed_form__in=set(words))
+
+		for word in Word.objects.bulk_create(new_words, ignore_conflicts=True, batch_size=self.batch_size):
+			word_to_id[word.changed_form] = word.id
 
 		positions = defaultdict(set)
 		currentPos = 0
@@ -117,8 +123,7 @@ class ArticlesParser():
 			if len(w) > 1:
 				currentPos += 1
 				try:
-					word = list(filter(lambda x: x.changed_form==w, created_words))[0]
-					positions[word.id].add(currentPos)
+					positions[word_to_id[w]].add(currentPos)
 				except:
 					logging.warning('searching word id error:')
 					logging.warning(w)
@@ -137,7 +142,7 @@ class ArticlesParser():
 		baseWords = re.findall('(\d+(?:\.|,)\d+|\w+|\.)', baseText)
 		changedWords = re.findall('(\d+(?:\.|,)\d+|\w+|\.)', changedText)
 		if len(baseWords) == len(changedWords):
-			if all(baseWords[i][:3] == changedWords[i][:3] for i in range(len(baseWords))):
+			if all((baseWords[i].isalpha() and changedWords[i].isalpha() and baseWords[i][:3] == changedWords[i][:3]) for i in range(len(baseWords))):
 				for i in range(len(baseWords)):
 					if baseWords[i] != changedWords[i]:
 						words.append(Word(base_form=baseWords[i], changed_form=changedWords[i]))
