@@ -11,22 +11,25 @@ class TfIdfWeightCalculator(calculators.weight_calculator.WeightCalculator):
         logging.info('start parsing questions')
         self.questions_words_count = defaultdict(lambda: 0)
         for question in Question.objects.all():
-            for word in self.__parse_question(question).values():
+            for word in set(self.__parse_question(question).values()):
                 self.questions_words_count[word] += 1
         logging.info('finish parsing questions')
 
-    def __parse_question(self, question):
+    def __parse_question(self, question, debug=False):
         words = re.findall('(\d+(?:\.|,)\d+|\w+|\.)', question.name)
-        words = Word.objects.filter(changed_form__in=words, is_stop_word=False).values('base_form')
-        words = list(map(lambda x: x['base_form'], words))
-        words = Word.objects.filter(changed_form__in=words, base_form__in=words, is_stop_word=False).values('id', 'base_form')
+        words = Word.objects.filter(changed_form__in=words).order_by('changed_form').values('id', 'is_stop_word', 'base_form', 'changed_form')
         base_form_to_id = {}
         for word in words:
-            base_form_to_id[word['base_form']] = word['id']
+            if list(filter(lambda w: w['changed_form'] == word['changed_form'] and w['is_stop_word'], words)):
+                continue
+            first_base_form = list(filter(lambda w: w['changed_form'] == word['changed_form'] and not w['is_stop_word'], words))[0]
+            if debug:
+                logging.debug('%s - %s' % (first_base_form['base_form'], word['base_form']))
+            base_form_to_id[word['base_form']] = first_base_form['id']
         return base_form_to_id
 
     def prepare(self, question, is_title):
-        question_words_base_form_to_id = self.__parse_question(question)
+        question_words_base_form_to_id = self.__parse_question(question, True)
         question_words_changed_form_to_base_form = {}
         for word in Word.objects.filter(base_form__in=question_words_base_form_to_id.keys(), is_stop_word=False).values('id', 'base_form'):
             question_words_changed_form_to_base_form[word['id']] = question_words_base_form_to_id[word['base_form']]
