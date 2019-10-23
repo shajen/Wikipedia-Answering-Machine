@@ -54,15 +54,14 @@ class ArticlesParser():
 		pass
 
 	def parseRedirect(self, title, text, links):
-		link = links[0].split('#')[0].replace('_', ' ')
 		try:
+			link = links[0].split('#')[0].replace('_', ' ')
 			redirected_to = Article.objects.get(title=link)
 			Article.objects.filter(title=title).update(redirected_to=redirected_to)
-		except:
-			logging.warning('exception during parseRedirect')
-			logging.warning(title)
-			logging.warning(text)
-			logging.warning(links)
+		except Exception as e:
+			logging.warning('exception during parsing redirect')
+			logging.warning(e)
+			logging.warning(link)
 
 	def parseArticle(self, title, text, links):
 		article = Article.objects.get(title=title)
@@ -83,23 +82,26 @@ class ArticlesParser():
 		# 			pass
 		title = self.normaliseText(title)
 		text = self.normaliseText(text)
-		for i in range(10):
+		probes = 10
+		for i in range(probes):
 			try:
 				self.parseText(article, title, True)
-				if i != 0:
-					logging.warning('success parsing title article: %s' % title)
-				break
-			except:
-				logging.warning('retry parse title article: %s' % title)
-				time.sleep(1)
-		for i in range(10):
-			try:
-				self.parseText(article, text, False)
-				if i != 0:
-					logging.warning('success parsing text article: %s' % title)
 				break
 			except Exception as e:
-				logging.warning('retry parse text article: %s' % title)
+				if i == probes - 1:
+					logging.warning('exception during parsing title')
+					logging.warning(e)
+					logging.warning(title)
+				time.sleep(1)
+		for i in range(probes):
+			try:
+				self.parseText(article, text, False)
+				break
+			except Exception as e:
+				if i == probes - 1:
+					logging.warning('exception during parsing text')
+					logging.warning(e)
+					logging.warning(title)
 				time.sleep(1)
 
 	def parseText(self, article, text, isTitle):
@@ -124,9 +126,10 @@ class ArticlesParser():
 				currentPos += 1
 				try:
 					positions[word_to_id[w]].add(currentPos)
-				except:
-					logging.warning('searching word id error:')
-					logging.warning(w)
+				except Exception as e:
+					logging.warning('exception during searching word')
+					logging.warning(e)
+					logging.warning('word id: %s, article title: %s' % (w, article.title))
 
 		new_occurrences = []
 		for word_id in positions:
