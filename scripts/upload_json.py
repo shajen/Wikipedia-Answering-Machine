@@ -4,10 +4,11 @@ import multiprocessing
 import argparse
 import json
 import logging
+import numpy as np
 import os
 import shlex
-import sys
 import smart_open
+import sys
 from django import db
 from functools import reduce, partial
 
@@ -15,6 +16,17 @@ sys.path.append(os.path.dirname(__file__))
 
 import tools.articles_parser
 import tools.logger
+
+def insert_objects(object_type, all_objects, batch_size):
+    logging.debug('inserting %d %s' % (len(all_objects), object_type.__name__))
+    for objects in np.array_split(all_objects, len(all_objects) / batch_size)
+        try:
+            object_type.objects.bulk_create(objects)
+        except Exception as e:
+            logging.warning('exception during insert %s:' % object_type.__name__)
+            logging.warning(e)
+            logging.warning(objects)
+    logging.debug('finish')
 
 def preparse_article_callback(batch_size, category_tag, line):
     try:
@@ -46,32 +58,14 @@ def preparse_articles(batch_size, file, category_tag, first_n_lines, pool):
         lines = lines[:first_n_lines]
     db.connections.close_all()
     data = pool.map(partial(preparse_article_callback, batch_size, category_tag), lines)
-    logging.info('inserting %d words' % reduce(lambda x, y: x + y, [len(w) for (a, c, w) in data]))
-    words = []
-    for (a, c, w) in data:
-        words.extend(w)
-        if len(words) >= batch_size:
-            Word.objects.bulk_create(words, ignore_conflicts=True)
-            words = []
-    Word.objects.bulk_create(words, ignore_conflicts=True)
+
+    words = [word for (a, c, words) in data for word in words]
+    insert_objects(Word, words, batch_size)
     articles = [a for (a, c, w) in data if a is not None]
-    logging.info('inserting %d articles' % len(articles))
-    Article.objects.bulk_create(articles, ignore_conflicts=True, batch_size=batch_size)
+    insert_objects(Article, articles, batch_size)
     categories = [c for (a, c, w) in data if c is not None]
-    logging.info('inserting %d categories' % len(categories))
-    Category.objects.bulk_create(categories, ignore_conflicts=True, batch_size=batch_size)
-
+    insert_objects(Category, categories, batch_size)
     logging.info('finish')
-
-def insert_words(words):
-    logging.debug('inserting %d words' % len(words))
-    try:
-        Word.objects.bulk_create(words, ignore_conflicts=True)
-        logging.debug('finish')
-    except Exception as e:
-        logging.warning('exeption during insert words:')
-        logging.warning(e)
-        logging.warning(words)
 
 def preparse_polimorfologik(batch_size, file, category_tag, first_n_lines):
     logging.info('preparse polimorfologik start')
@@ -84,10 +78,7 @@ def preparse_polimorfologik(batch_size, file, category_tag, first_n_lines):
     logging.info('inserting %d words\n' % len(lines))
     for (changed_form, base_form) in lines:
         words.append(Word(base_form=base_form, changed_form=changed_form))
-        if len(words) >= batch_size:
-            insert_words(words)
-            words = []
-    insert_words(words)
+    insert_objects(Word, words, batch_size)
     logging.info('finish')
 
 def parse_stop_words(file, first_n_lines):
