@@ -68,8 +68,10 @@ class TfIdfWeightCalculator(calculators.weight_calculator.WeightCalculator):
                 tf = 1.0 / len(set(question_words_changed_form_to_base_form.values()))
                 self.question_words_weights[word] = tf * words_idf[word]
                 logging.debug(' - %-40s %.6f (%3d)' % (Word.objects.get(id=word), self.question_words_weights[word], self.questions_words_count[word]))
-            except:
-                pass
+            except Exception as e:
+                logging.warning('exception during count question words weights')
+                logging.warning(e)
+                logging.warning('question: %s, word: %s' % (question, word))
 
     def __count_tf_idf(self, sum_neighbors, minimal_word_idf, comparator):
         articles_words_weights = defaultdict(defaultdict)
@@ -96,10 +98,16 @@ class TfIdfWeightCalculator(calculators.weight_calculator.WeightCalculator):
                     weights[word_id] = count / (sum_neighbors + 1) * self.words_idf[word_id]
                 articles_words_set_weights.append(weights)
 
-            (best_weight, best_words_weights) = comparator.get_best_score(self.question_words_weights, articles_words_set_weights)
-            for word_id in best_words_weights:
-                articles_words_weights[item_id][word_id] = best_words_weights[word_id]
-            articles_weight[item_id] = best_weight
+            try:
+                filtered_question_words_weights = dict(filter(lambda data: self.words_idf[data[0]] > minimal_word_idf, self.question_words_weights.items()))
+                (best_weight, best_words_weights) = comparator.get_best_score(filtered_question_words_weights, articles_words_set_weights)
+                for word_id in best_words_weights:
+                    articles_words_weights[item_id][word_id] = best_words_weights[word_id]
+                articles_weight[item_id] = best_weight
+            except ValueError as e:
+                logging.warn('exception during count articles weight')
+                logging.warn(e)
+                logging.warn(item_id)
 
         return (articles_words_weights, articles_weight)
 
