@@ -87,10 +87,11 @@ class TfIdfWeightCalculator(calculators.weight_calculator.WeightCalculator):
             current_words = deque()
             articles_words_set_weights = []
 
+            item_words_count = (len(self.articles_positions[item_id]) if sum_neighbors == 0 else (sum_neighbors+1))
             for data in words_positions:
                 current_words.append(data)
                 counter[data[1]] += 1
-                while current_words[0][0] + sum_neighbors < current_words[-1][0]:
+                while current_words[0][0] + (10**9 if sum_neighbors == 0 else sum_neighbors) < current_words[-1][0]:
                     pop_data = current_words.popleft()
                     counter[pop_data[1]] -= 1
                     if counter[pop_data[1]] == 0:
@@ -98,7 +99,7 @@ class TfIdfWeightCalculator(calculators.weight_calculator.WeightCalculator):
 
                 weights = {}
                 for word_id, count in counter.items():
-                    weights[word_id] = count / (sum_neighbors + 1) * self.words_idf[word_id]
+                    weights[word_id] = count / item_words_count * self.words_idf[word_id]
                 articles_words_set_weights.append(weights)
 
             try:
