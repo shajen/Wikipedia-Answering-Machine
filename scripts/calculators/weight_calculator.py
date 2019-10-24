@@ -19,14 +19,7 @@ class WeightCalculator:
             self.articles_title[article['id']] = article['title']
         logging.info('finish reading')
 
-    def _normalise(self, data):
-        if data:
-            max_weight = max(data.values())
-            if max_weight > 0:
-                data = {k: v / max_weight for k, v in data.items()}
-        return data
-
-    def _print_item(self, item_id, items_weight, items_id_weights, item_objects, id_objects):
+    def __print_item(self, item_id, items_weight, items_id_weights, item_objects, id_objects):
         try:
             weight = items_weight[item_id]
         except:
@@ -46,33 +39,22 @@ class WeightCalculator:
                 return i + 1
         return 10**9
 
-    def _count_weights(self, items_id_weights, power_factor):
-        items_weight = {}
-        for item_id in items_id_weights:
-            count = len(items_id_weights[item_id])
-            items_weight[item_id] = math.pow(count, power_factor) * reduce((lambda x, y: x + y), items_id_weights[item_id].values(), 0.0)
-        items_weight = self._normalise(items_weight)
-        return items_weight
-
     def _count_positions(self, question, items_id_weights, items_weight, ascending_order, item_objects, id_objects):
         items_ranking = sorted(items_weight.items(), key=operator.itemgetter(1), reverse=ascending_order)
 
         if self.debug_top_items > 0:
             logging.info('top %d items:' % self.debug_top_items)
             for (item_id, weight) in items_ranking[:self.debug_top_items]:
-                self._print_item(item_id, items_weight, items_id_weights, item_objects, id_objects)
+                self.__print_item(item_id, items_weight, items_id_weights, item_objects, id_objects)
 
         logging.info('expected items:')
         answers_positions = []
         for answer in question.answer_set.all():
-            self._print_item(answer.article.id, items_weight, items_id_weights, item_objects, id_objects)
+            self.__print_item(answer.article.id, items_weight, items_id_weights, item_objects, id_objects)
             position = self.__get_article_position(items_ranking, answer.article.id)
             logging.info('position: %d' % position)
             answers_positions.append((answer, position))
         return answers_positions
-
-    def _get_top_n_items(self, dict, n):
-        return {k: v for (k, v) in Counter(dict).most_common(n)}
 
     def _upload_positions(self, positions, method_name):
         logging.info(positions)
