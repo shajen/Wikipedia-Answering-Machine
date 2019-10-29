@@ -119,9 +119,10 @@ class ArticlesParser():
 		for w in set(words):
 			if len(w) > 1 and w not in found_words:
 				new_words.append(Word(base_form=w, changed_form=w))
+		Word.objects.bulk_create(new_words, ignore_conflicts=True, batch_size=self.batch_size)
 
-		for word in Word.objects.bulk_create(new_words, ignore_conflicts=True, batch_size=self.batch_size):
-			word_to_id[word.changed_form] = word.id
+		for word in Word.objects.filter(changed_form__in=(set(words) - found_words)).values('id', 'changed_form'):
+			word_to_id[word['changed_form']] = word['id']
 
 		positions = defaultdict(set)
 		currentPos = 0
