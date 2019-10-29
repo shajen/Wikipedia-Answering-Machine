@@ -138,6 +138,11 @@ class ArticlesParser():
 		new_occurrences = []
 		for word_id in positions:
 			p = ','.join(str(s) for s in positions[word_id])
+			if len(p) > 2048:
+				p = re.sub('\d+$', '', p[:2048])
+				logging.warning('exception during insert Occurence')
+				logging.warning('positions too long, truncated positions')
+				logging.warning('word id: %s, article title: %s' % (word_id, article.title))
 			new_occurrences.append(Occurrence(article=article, word_id=word_id, positions=p, positions_count=len(positions[word_id]), is_title=isTitle))
 
 		Occurrence.objects.bulk_create(new_occurrences, ignore_conflicts=True, batch_size=self.batch_size)
