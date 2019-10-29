@@ -117,7 +117,7 @@ def parse_articles_callback(batch_size, category_tag, redirect_tag, line):
             title = title[len(category_tag):]
             articlesParser.parseCategory(title, text, links)
         elif text.lower().startswith(redirect_tag):
-            articlesParser.parseRedirect(title, text, links)
+            articlesParser.parseRedirect(title, text, links, redirect_tag)
         else:
             articlesParser.parseArticle(title, text, links)
         # print(json.dumps(data, indent=4, sort_keys=True))

@@ -53,15 +53,19 @@ class ArticlesParser():
 	def parseCategory(self, title, text, links):
 		pass
 
-	def parseRedirect(self, title, text, links):
+	def parseRedirect(self, title, text, links, redirect_tag):
 		try:
-			link = links[0].split('#')[0].replace('_', ' ')
+			if links:
+				link = links[0].split('#')[0]
+			else:
+				link = text.replace(redirect_tag, '')
+			link = link.replace('_', ' ').strip()
 			redirected_to = Article.objects.get(title=link)
 			Article.objects.filter(title=title).update(redirected_to=redirected_to)
 		except Exception as e:
 			logging.warning('exception during parsing redirect')
 			logging.warning(e)
-			logging.warning(link)
+			logging.warning('title: %s, link: %s' % (title, link))
 
 	def parseArticle(self, title, text, links):
 		article = Article.objects.get(title=title)
