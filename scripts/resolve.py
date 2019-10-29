@@ -119,12 +119,15 @@ def run(*args):
     parser.add_argument("-dti", "--debug_top_items", help="print top n items in debug", type=int, default=3, metavar="int")
     parser.add_argument("-mwiw", "--minimal_word_idf_weight", help="use only words with idf weight above", type=float, default=0.0, metavar="float")
     parser.add_argument("-pf", "--power_factor", help="use to sum words weight in count article weight", type=float, default=0.0, metavar="float")
+    parser.add_argument("-uawc", "--update_articles_words_count", help="update articles words count", action='store_true')
     parser.add_argument('-v', '--verbose', action='count', default=0)
     args = parser.parse_args(args)
 
     tools.logger.configLogger(args.verbose)
-    #update_articles_words_count(True)
-    #update_articles_words_count(False)
+    if args.update_articles_words_count:
+        update_articles_words_count(True)
+        update_articles_words_count(False)
+        return
 
     questions = list(Question.objects.all())
     dirPath = os.path.dirname(os.path.realpath(__file__))
