@@ -122,7 +122,7 @@ class Word(models.Model):
 class Occurrence(models.Model):
     article = models.ForeignKey(Article, on_delete=models.CASCADE)
     word = models.ForeignKey(Word, on_delete=models.CASCADE)
-    positions = models.CharField(max_length=2048)
+    positions = models.CharField(max_length=20480)
     positions_count = models.PositiveSmallIntegerField(db_index=True)
     is_title = models.BooleanField(default=False, db_index=True)
 
