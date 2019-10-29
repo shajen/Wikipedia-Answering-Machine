@@ -61,7 +61,7 @@ class TfIdfWeightCalculator(calculators.weight_calculator.WeightCalculator):
         #     questions_words_idf[word] = math.log(Question.objects.count() / questions_words_count[word])
         return (articles_words_idf, questions_words_idf)
 
-    def __count_question_words_weights(question_words_changed_form_to_base_form, questions_words_count, questions_words_idf):
+    def __count_question_words_weights(question, question_words_changed_form_to_base_form, questions_words_count, questions_words_idf):
         logging.debug('question words weights')
         question_words_weights = {}
         for word in set(question_words_changed_form_to_base_form.values()):
@@ -83,7 +83,7 @@ class TfIdfWeightCalculator(calculators.weight_calculator.WeightCalculator):
 
         (self.articles_words_count, self.articles_positions) = TfIdfWeightCalculator.__count_articles(question_words_changed_form_to_base_form, is_title)
         (self.articles_words_idf, questions_words_idf) = TfIdfWeightCalculator.__count_idf(self.articles_title_count, self.articles_words_count)
-        self.question_words_weights = TfIdfWeightCalculator.__count_question_words_weights(question_words_changed_form_to_base_form, self.questions_words_count, questions_words_idf)
+        self.question_words_weights = TfIdfWeightCalculator.__count_question_words_weights(question, question_words_changed_form_to_base_form, self.questions_words_count, questions_words_idf)
 
     def __count_tf_idf(self, question, sum_neighbors, minimal_word_idf, comparator):
         articles_words_weights = defaultdict(defaultdict)
