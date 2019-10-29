@@ -23,6 +23,7 @@ def run(*args):
     parser.add_argument("-qap", "--question_answer_position", help="print questions start from answer position", type=int, default=100, metavar='position')
     parser.add_argument("-qab", "--question_better", help="print questions answers from better to worst way", action='store_true')
     parser.add_argument("-qc", "--question_count", help="print n questions", type=int, default=3, metavar='n')
+    parser.add_argument("-hs", "--hide_score", help="hide score below treshlod", type=float, default=0.0, metavar='f')
     parser.add_argument("-snf", "--show_not_found", help="show not found answers", action='store_true')
     parser.add_argument("-nc", "--no_color", help="switch off color", action='store_true')
     parser.add_argument('-v', '--verbose', action='count', default=0)
@@ -39,5 +40,6 @@ def run(*args):
         'questionBetter' : args.question_better,
         'questionCount' : args.question_count,
         'showNotFound' : args.show_not_found,
+        'hideScoreTreshold' : args.hide_score,
         }
     qam.process(data)

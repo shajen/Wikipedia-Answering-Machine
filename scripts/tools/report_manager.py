@@ -50,17 +50,24 @@ class ReportManager():
             answersCount = method.solution_set.count()
             if answersCount == 0:
                 continue
+            positions = methods_questions_positions[method.id].values()
+            positions = [list(x) for x in positions]
+            positions = reduce(lambda x, y: x + y, positions, [])
+            if all(len(list(filter(lambda x: x <= t, positions)))/answersCount <= args['hideScoreTreshold'] for t in args['tops']):
+                continue
             if len(method.name) <= LEN:
                 sys.stdout.write("%s %5d" % (self.methodColor(method.name.ljust(LEN)), answersCount))
             else:
                 sys.stdout.write("%s\n" % self.methodColor(method.name))
                 sys.stdout.write('%s %5d' % (' ' * LEN, answersCount))
-            positions = methods_questions_positions[method.id].values()
-            positions = [list(x) for x in positions]
-            positions = reduce(lambda x, y: x + y, positions, [])
+
             for t in args['tops']:
                 corrected = len(list(filter(lambda x: x <= t, positions)))
-                sys.stdout.write("  %.4f" % (0 if answersCount == 0 else float(corrected)/answersCount))
+                weight = corrected/answersCount
+                if (weight < args['hideScoreTreshold']):
+                    sys.stdout.write("        ")
+                else:
+                    sys.stdout.write("  %.4f" % weight)
             sys.stdout.write('\n')
 
     def printQuestions(self, args):
