@@ -19,9 +19,10 @@ import tools.logger
 
 def insert_objects(object_type, all_objects, batch_size):
     logging.debug('inserting %d %s' % (len(all_objects), object_type.__name__))
-    for objects in np.array_split(all_objects, len(all_objects) / batch_size):
+    for objects in np.array_split(all_objects, max(1, len(all_objects) / batch_size)):
         try:
-            object_type.objects.bulk_create(objects)
+            objects = list(objects)
+            object_type.objects.bulk_create(objects, ignore_conflicts=True)
         except Exception as e:
             logging.warning('exception during insert %s:' % object_type.__name__)
             logging.warning(e)
