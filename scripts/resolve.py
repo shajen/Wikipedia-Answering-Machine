@@ -25,7 +25,12 @@ def update_articles_words_count(is_title):
     stop_words = list(map(lambda x: x['id'], Word.objects.filter(is_stop_word = True).values('id')))
     articles = Occurrence.objects.values('article_id').filter(is_title=is_title).exclude(word_id__in=stop_words).annotate(count=Sum('positions_count'))
     logging.info('reading articles words count')
+    i = 0
     for article in articles:
+        i += 1
+        if i % 10000 == 0:
+            logging.info(article)
+            logging.info('iteration #%d' % i)
         try:
             if is_title:
                 Article.objects.filter(id=article['article_id']).update(title_words_count=article['count'])
