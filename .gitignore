@@ -1,1 +1,4 @@
 __pycache__
+mgr_database.sqlite3
+log/
+mysql_*
