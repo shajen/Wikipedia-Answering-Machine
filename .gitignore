@@ -2,3 +2,7 @@ __pycache__
 mgr_database.sqlite3
 log/
 mysql_*
+files/*.json
+files/*.json.gz
+files/*.xml.bz2
+files/polimorfologik.txt
