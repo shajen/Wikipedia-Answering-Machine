@@ -1,6 +1,5 @@
 from data.models import *
 from django import db
-from django.db.models import Sum, Count
 
 import argparse
 import logging
@@ -18,29 +17,6 @@ import calculators.links_weight_calculator
 import calculators.tf_idf_weight_calculator
 import calculators.weight_comparator
 import tools.logger
-
-def update_articles_words_count(is_title):
-    logging.info('start update_articles_words_count is_title: %d' % is_title)
-    logging.info('reading stop words')
-    stop_words = list(map(lambda x: x['id'], Word.objects.filter(is_stop_word = True).values('id')))
-    articles = Occurrence.objects.values('article_id').filter(is_title=is_title).exclude(word_id__in=stop_words).annotate(count=Sum('positions_count'))
-    logging.info('reading articles words count')
-    i = 0
-    for article in articles:
-        i += 1
-        if i % 10000 == 0:
-            logging.info(article)
-            logging.info('iteration #%d' % i)
-        try:
-            if is_title:
-                Article.objects.filter(id=article['article_id']).update(title_words_count=article['count'])
-            else:
-                Article.objects.filter(id=article['article_id']).update(content_words_count=article['count'])
-        except Exception as e:
-            logging.warning('exception during update_articles_words_count:')
-            logging.warning(e)
-            logging.warning(article)
-    logging.info('finished update_articles_words_count')
 
 def resolve_questions(questions_queue, method_name, is_title, debug_top_items, neighbors, minimal_word_idf_weights, power_factors):
     tf_idf_calculator = calculators.tf_idf_weight_calculator.TfIdfWeightCalculator(debug_top_items)
@@ -125,15 +101,10 @@ def run(*args):
     parser.add_argument("-dti", "--debug_top_items", help="print top n items in debug", type=int, default=3, metavar="int")
     parser.add_argument("-mwiw", "--minimal_word_idf_weight", help="use only words with idf weight above", type=float, default=0.0, metavar="float")
     parser.add_argument("-pf", "--power_factor", help="use to sum words weight in count article weight", type=float, default=0.0, metavar="float")
-    parser.add_argument("-uawc", "--update_articles_words_count", help="update articles words count", action='store_true')
     parser.add_argument('-v', '--verbose', action='count', default=0)
     args = parser.parse_args(args)
 
     tools.logger.configLogger(args.verbose)
-    if args.update_articles_words_count:
-        update_articles_words_count(True)
-        update_articles_words_count(False)
-        return
 
     questions = list(Question.objects.all())
     dirPath = os.path.dirname(os.path.realpath(__file__))

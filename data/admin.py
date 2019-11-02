@@ -23,11 +23,15 @@ class SolutionAdmin(admin.ModelAdmin):
 
 class WordAdmin(admin.ModelAdmin):
 	list_per_page = 100
-	list_display = ('id', 'base_form', 'changed_form', 'is_stop_word')
+	list_display = ('id', 'value', 'is_stop_word')
 
-class OccurrenceAdmin(admin.ModelAdmin):
+class ArticleOccurrenceAdmin(admin.ModelAdmin):
 	list_per_page = 100
-	list_display = ('id', 'word', 'article', 'positions', 'positions_count')
+	list_display = ('id', 'word', 'article', 'positions', 'positions_count', 'is_title')
+
+class QuestionOccurrenceAdmin(admin.ModelAdmin):
+	list_per_page = 100
+	list_display = ('id', 'word', 'question', 'positions', 'positions_count')
 
 admin.site.register(Article, ArticleAdmin)
 admin.site.register(Method, MethodAdmin)
@@ -35,4 +39,5 @@ admin.site.register(Question, QuestionAdmin)
 admin.site.register(Answer, AnswerAdmin)
 admin.site.register(Solution, SolutionAdmin)
 admin.site.register(Word, WordAdmin)
-admin.site.register(Occurrence, OccurrenceAdmin)
+admin.site.register(ArticleOccurrence, ArticleOccurrenceAdmin)
+admin.site.register(QuestionOccurrence, QuestionOccurrenceAdmin)

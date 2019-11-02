@@ -108,18 +108,32 @@ class Solution(models.Model):
         unique_together = ('answer', 'method')
 
 class Word(models.Model):
-    base_form = models.CharField(max_length=100, db_index=True)
-    changed_form = models.CharField(max_length=100, db_index=True)
+    value = models.CharField(max_length=100, unique=True, db_index=True)
     is_stop_word = models.BooleanField(default=False, db_index=True)
     added_date = models.DateTimeField(auto_now_add=True)
 
+    base_forms = models.ManyToManyField(
+        to='self',
+        related_name='changed_forms',
+        symmetrical=False,
+        through='WordForm'
+    )
+
     def __str__(self):
-        return '%s (%s)' % (self.changed_form, self.base_form)
+        return self.value
+
+class WordForm(models.Model):
+    changed_word = models.ForeignKey(Word, on_delete=models.CASCADE, related_name='from_word')
+    base_word = models.ForeignKey(Word, on_delete=models.CASCADE, related_name='to_word')
+    added_date = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return '%s - %s' % (self.base_form, self.changed_form)
 
     class Meta:
-        unique_together = ('base_form', 'changed_form',)
+        unique_together = ('changed_word', 'base_word')
 
-class Occurrence(models.Model):
+class ArticleOccurrence(models.Model):
     article = models.ForeignKey(Article, on_delete=models.CASCADE)
     word = models.ForeignKey(Word, on_delete=models.CASCADE)
     positions = models.CharField(max_length=20480)
@@ -131,3 +145,15 @@ class Occurrence(models.Model):
 
     class Meta:
         unique_together = ('article', 'word', 'is_title')
+
+class QuestionOccurrence(models.Model):
+    question = models.ForeignKey(Question, on_delete=models.CASCADE)
+    word = models.ForeignKey(Word, on_delete=models.CASCADE)
+    positions = models.CharField(max_length=20480)
+    positions_count = models.PositiveSmallIntegerField(db_index=True)
+
+    def __str__(self):
+        return '%s - %s: %s' % (self.word, self.question, self.positions)
+
+    class Meta:
+        unique_together = ('question', 'word')

@@ -1,5 +1,6 @@
 from data.models import *
 
+from collections import defaultdict
 import logging
 import re
 
@@ -45,6 +46,33 @@ class QuestionsParser:
         if answers:
             try:
                 question, created = Question.objects.get_or_create(name=question_text)
+                words = re.findall('(\d+(?:\.|,)\d+|\w+|\.)', question_text)
+                words_objects = []
+                for word in words:
+                    words_objects.append(Word(value=word))
+                Word.objects.bulk_create(words_objects, ignore_conflicts=True)
+
+                word_value_to_id = {}
+                for word in Word.objects.filter(value__in=words).values('id', 'value'):
+                    word_value_to_id[word['value']] = word['id']
+
+                words_positions = defaultdict(list)
+                position = 0
+                for word in words:
+                    position += 1
+                    words_positions[word].append(position)
+
+                question_occurrence_objects = []
+                for word in set(words):
+                    try:
+                        positions = ','.join(str(s) for s in words_positions[word])
+                        question_occurrence_objects.append(QuestionOccurrence(question=question, word_id=word_value_to_id[word], positions=positions, positions_count=len(words_positions[word])))
+                    except Exception as e:
+                        logging.warning('exception during searching word id:')
+                        logging.warning(e)
+                        logging.warning('word: %s' % (word))
+                QuestionOccurrence.objects.bulk_create(question_occurrence_objects, ignore_conflicts=True)
+
             except Exception as e:
                 logging.warning('exception during get_or_create question:')
                 logging.warning(e)

@@ -112,17 +112,17 @@ class ArticlesParser():
 		new_words = []
 		words = re.findall('(\d+(?:\.|,)\d+|\w+|\.)', text)
 		word_to_id = {}
-		for word in Word.objects.filter(changed_form__in=set(words)).values('id', 'changed_form'):
-			word_to_id[word['changed_form']] = word['id']
+		for word in Word.objects.filter(value__in=set(words)).values('id', 'value'):
+			word_to_id[word['value']] = word['id']
 
 		found_words = word_to_id.keys()
 		for w in set(words):
 			if len(w) > 1 and w not in found_words:
-				new_words.append(Word(base_form=w, changed_form=w))
+				new_words.append(Word(value=w))
 		Word.objects.bulk_create(new_words, ignore_conflicts=True, batch_size=self.batch_size)
 
-		for word in Word.objects.filter(changed_form__in=(set(words) - found_words)).values('id', 'changed_form'):
-			word_to_id[word['changed_form']] = word['id']
+		for word in Word.objects.filter(value__in=(set(words) - found_words)).values('id', 'value'):
+			word_to_id[word['value']] = word['id']
 
 		positions = defaultdict(set)
 		currentPos = 0
@@ -141,15 +141,15 @@ class ArticlesParser():
 			p = ','.join(str(s) for s in positions[word_id])
 			if len(p) > 20480:
 				p = re.sub('\d+$', '', p[:20480])
-				logging.warning('exception during insert Occurence')
+				logging.warning('exception during insert ArticleOccurrence')
 				logging.warning('positions too long, truncated positions')
 				logging.warning('word id: %s, article title: %s' % (word_id, article.title))
-			new_occurrences.append(Occurrence(article=article, word_id=word_id, positions=p, positions_count=len(positions[word_id]), is_title=isTitle))
+			new_occurrences.append(ArticleOccurrence(article=article, word_id=word_id, positions=p, positions_count=len(positions[word_id]), is_title=isTitle))
 
-		Occurrence.objects.bulk_create(new_occurrences, ignore_conflicts=True, batch_size=self.batch_size)
+		ArticleOccurrence.objects.bulk_create(new_occurrences, ignore_conflicts=True, batch_size=self.batch_size)
 
 	def addBaseForms(self, baseText, changedText):
-		words = []
+		base_forms = []
 		baseText = re.sub('(\(.+?\))', ' ', baseText.lower())
 		changedText = re.sub('(\(.+?\))', ' ', changedText.lower())
 		baseWords = re.findall('(\d+(?:\.|,)\d+|\w+|\.)', baseText)
@@ -158,5 +158,5 @@ class ArticlesParser():
 			if all((baseWords[i].isalpha() and changedWords[i].isalpha() and baseWords[i][:3] == changedWords[i][:3]) for i in range(len(baseWords))):
 				for i in range(len(baseWords)):
 					if baseWords[i] != changedWords[i]:
-						words.append(Word(base_form=baseWords[i], changed_form=changedWords[i]))
-		return words
+						base_forms.append((baseWords[i], changedWords[i]))
+		return base_forms

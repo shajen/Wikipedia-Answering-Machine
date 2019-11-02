@@ -10,36 +10,42 @@ class TfIdfWeightCalculator(calculators.weight_calculator.WeightCalculator):
         super().__init__(debug_top_items)
         logging.info('start parsing questions')
         self.questions_words_count = defaultdict(lambda: 0)
-        for question in Question.objects.all():
-            for word in set(TfIdfWeightCalculator.__parse_question(question).values()):
-                self.questions_words_count[word] += 1
+        for word in QuestionOccurrence.objects.values_list('word', flat=True):
+            self.questions_words_count[word] += 1
         logging.info('finish parsing questions')
 
-    def __parse_question(question, debug=False):
-        words = re.findall('(\d+(?:\.|,)\d+|\w+|\.)', question.name)
-        words = Word.objects.filter(changed_form__in=words).order_by('changed_form').values('id', 'is_stop_word', 'base_form', 'changed_form')
-        base_form_to_id = {}
-        for word in words:
-            if list(filter(lambda w: w['changed_form'] == word['changed_form'] and w['is_stop_word'], words)):
+    def __get_words(question, debug=False):
+        word_to_representer = {}
+        for occurrence in QuestionOccurrence.objects.filter(question=question):
+            org_word = occurrence.word
+            if org_word.is_stop_word:
                 continue
-            first_base_form = list(filter(lambda w: w['changed_form'] == word['changed_form'] and not w['is_stop_word'], words))[0]
-            if debug:
-                logging.debug('%s - %s' % (first_base_form['base_form'], word['base_form']))
-            base_form_to_id[word['base_form']] = first_base_form['id']
-        return base_form_to_id
+            for base_word in list(WordForm.objects.filter(changed_word=org_word.id).values_list('base_word', flat=True)) + [org_word.id]:
+                word_to_representer[base_word] = org_word.id
+                for changed_word in WordForm.objects.filter(base_word_id=base_word).values_list('changed_word', flat=True):
+                    word_to_representer[changed_word] = org_word.id
 
-    def __count_articles(question_words_changed_form_to_base_form, is_title):
+        if debug:
+            for representer in set(word_to_representer.values()):
+                words = list(filter(lambda data: data[1] == representer, word_to_representer.items()))
+                words = list(map(lambda data: data[0], words))
+                words = Word.objects.filter(id__in=words).values_list('value', flat=True)
+                words = ', '.join(words)
+                logging.debug('%s (%s)' % (Word.objects.get(id=representer), words))
+        return word_to_representer
+
+    def __count_articles(word_to_representer, is_title):
         articles_words_count = defaultdict(lambda: defaultdict(lambda: 0))
         # articles_words_positions = defaultdict(defaultdict)
         articles_positions = defaultdict(list)
-        occurrences = Occurrence.objects.filter(word_id__in=question_words_changed_form_to_base_form.keys(), is_title=is_title).values('article_id', 'word_id', 'positions_count', 'positions')
+        occurrences = ArticleOccurrence.objects.filter(word_id__in=word_to_representer.keys(), is_title=is_title).values('article_id', 'word_id', 'positions_count', 'positions')
         for occurrence in occurrences:
-            base_form_id = question_words_changed_form_to_base_form[occurrence['word_id']]
-            articles_words_count[occurrence['article_id']][base_form_id] += occurrence['positions_count']
+            representer = word_to_representer[occurrence['word_id']]
+            articles_words_count[occurrence['article_id']][representer] += occurrence['positions_count']
             #if len(positions) == occurrence['positions_count']:
             positions = [int(p) for p in occurrence['positions'].strip().split(',') if p]
-            # articles_words_positions[occurrence['article_id']][base_form_id] = positions
-            articles_positions[occurrence['article_id']].extend([(p, base_form_id) for p in positions])
+            # articles_words_positions[occurrence['article_id']][representer] = positions
+            articles_positions[occurrence['article_id']].extend([(p, representer) for p in positions])
 
         for item_id in articles_positions:
             articles_positions[item_id].sort(key=lambda d: d[0])
@@ -57,16 +63,16 @@ class TfIdfWeightCalculator(calculators.weight_calculator.WeightCalculator):
             articles_words_idf[word_id] = math.log(len(articles_title_count) / words_articles_count[word_id])
             questions_words_idf[word_id] = articles_words_idf[word_id]
 
-        # for word in set(question_words_changed_form_to_base_form.values()):
+        # for word in set(word_to_representer.values()):
         #     questions_words_idf[word] = math.log(Question.objects.count() / questions_words_count[word])
         return (articles_words_idf, questions_words_idf)
 
-    def __count_question_words_weights(question, question_words_changed_form_to_base_form, questions_words_count, questions_words_idf):
+    def __count_question_words_weights(question, word_to_representer, questions_words_count, questions_words_idf):
         logging.debug('question words weights')
         question_words_weights = {}
-        for word in set(question_words_changed_form_to_base_form.values()):
+        for word in set(word_to_representer.values()):
             try:
-                tf = 1.0 / len(set(question_words_changed_form_to_base_form.values()))
+                tf = 1.0 / len(set(word_to_representer.values()))
                 question_words_weights[word] = tf * questions_words_idf[word]
                 logging.debug(' - %-40s %.6f (%3d)' % (Word.objects.get(id=word), question_words_weights[word], questions_words_count[word]))
             except Exception as e:
@@ -76,14 +82,10 @@ class TfIdfWeightCalculator(calculators.weight_calculator.WeightCalculator):
         return question_words_weights
 
     def prepare(self, question, is_title):
-        question_words_base_form_to_id = TfIdfWeightCalculator.__parse_question(question, True)
-        question_words_changed_form_to_base_form = {}
-        for word in Word.objects.filter(base_form__in=question_words_base_form_to_id.keys(), is_stop_word=False).values('id', 'base_form'):
-            question_words_changed_form_to_base_form[word['id']] = question_words_base_form_to_id[word['base_form']]
-
-        (self.articles_words_count, self.articles_positions) = TfIdfWeightCalculator.__count_articles(question_words_changed_form_to_base_form, is_title)
+        word_to_representer = TfIdfWeightCalculator.__get_words(question, True)
+        (self.articles_words_count, self.articles_positions) = TfIdfWeightCalculator.__count_articles(word_to_representer, is_title)
         (self.articles_words_idf, questions_words_idf) = TfIdfWeightCalculator.__count_idf(self.articles_title_count, self.articles_words_count)
-        self.question_words_weights = TfIdfWeightCalculator.__count_question_words_weights(question, question_words_changed_form_to_base_form, self.questions_words_count, questions_words_idf)
+        self.question_words_weights = TfIdfWeightCalculator.__count_question_words_weights(question, word_to_representer, self.questions_words_count, questions_words_idf)
 
     def __count_tf_idf(self, question, sum_neighbors, minimal_word_idf, comparator):
         articles_words_weights = defaultdict(defaultdict)

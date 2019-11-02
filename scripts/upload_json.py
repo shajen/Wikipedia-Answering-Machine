@@ -1,16 +1,17 @@
+from collections import defaultdict
 from data.models import *
-import multiprocessing
-
+from django import db
+from django.db.models import Sum
+from functools import reduce, partial
 import argparse
 import json
 import logging
+import multiprocessing
 import numpy as np
 import os
 import shlex
 import smart_open
 import sys
-from django import db
-from functools import reduce, partial
 
 sys.path.append(os.path.dirname(__file__))
 
@@ -18,7 +19,7 @@ import tools.articles_parser
 import tools.logger
 
 def insert_objects(object_type, all_objects, batch_size):
-    logging.debug('inserting %d %s' % (len(all_objects), object_type.__name__))
+    logging.info('inserting %d %s' % (len(all_objects), object_type.__name__))
     i = 0
     for objects in np.array_split(all_objects, max(1, len(all_objects) / batch_size)):
         i += batch_size
@@ -30,25 +31,49 @@ def insert_objects(object_type, all_objects, batch_size):
             logging.warning('exception during insert %s:' % object_type.__name__)
             logging.warning(e)
             logging.warning(objects)
-    logging.debug('finish')
+    logging.info('finish')
+
+def insert_base_forms(base_forms, batch_size):
+    words = set()
+    for (base_form, changed_form) in base_forms:
+        words.add(base_form)
+        words.add(changed_form)
+    words_objects = []
+    for word in words:
+        words_objects.append(Word(value=word))
+    insert_objects(Word, words_objects, batch_size)
+
+    word_value_to_id = {}
+    for word in Word.objects.filter(value__in=words).values('value', 'id'):
+        word_value_to_id[word['value']] = word['id']
+
+    word_forms_objects = []
+    for (base_form, changed_form) in base_forms:
+        try:
+            word_forms_objects.append(WordForm(base_word_id=word_value_to_id[base_form], changed_word_id=word_value_to_id[changed_form]))
+        except Exception as e:
+            logging.warning('exception durig insert_base_forms:')
+            logging.warning(e)
+            logging.warning('base_form: %s, changed_word: %s' % (base_form, changed_form))
+    insert_objects(WordForm, word_forms_objects, batch_size)
 
 def preparse_article_callback(batch_size, category_tag, line):
     try:
         articlesParser = tools.articles_parser.ArticlesParser(batch_size, category_tag)
-        words = []
+        base_forms = []
         data = json.loads(line)
         title = data['title'].strip().lower()
         logging.debug('%s' % (title))
 
         for baseText in data['interlinks']:
             logging.debug('%s - %s' % (baseText, data['interlinks'][baseText]))
-            words.extend(articlesParser.addBaseForms(baseText, data['interlinks'][baseText]))
+            base_forms.extend(articlesParser.addBaseForms(baseText, data['interlinks'][baseText]))
 
         if title.startswith(category_tag):
             title = title[len(category_tag):]
-            return (None, Category(title=title), words)
+            return (None, Category(title=title), base_forms)
         else:
-            return (Article(title=title), None, words)
+            return (Article(title=title), None, base_forms)
     except Exception as e:
         logging.warning('exception durig preparse_article_callback:')
         logging.warning(e)
@@ -63,8 +88,8 @@ def preparse_articles(batch_size, file, category_tag, first_n_lines, pool):
     db.connections.close_all()
     data = pool.map(partial(preparse_article_callback, batch_size, category_tag), lines)
 
-    words = [word for (a, c, words) in data for word in words]
-    insert_objects(Word, words, batch_size)
+    base_forms = [word for (a, c, base_forms) in data for word in base_forms]
+    insert_base_forms(base_forms, batch_size)
     articles = [a for (a, c, w) in data if a is not None]
     insert_objects(Article, articles, batch_size)
     categories = [c for (a, c, w) in data if c is not None]
@@ -73,16 +98,16 @@ def preparse_articles(batch_size, file, category_tag, first_n_lines, pool):
 
 def preparse_polimorfologik(batch_size, file, category_tag, first_n_lines):
     logging.info('preparse polimorfologik start')
-    words = []
     articlesParser = tools.articles_parser.ArticlesParser(batch_size, category_tag)
     lines = list(open(file, 'r'))
     if first_n_lines > 0:
         lines = lines[:first_n_lines]
     lines = list(set([tuple(line.strip().lower().split('\t')[:2]) for line in lines]))
     logging.info('inserting %d words\n' % len(lines))
+    base_forms = []
     for (changed_form, base_form) in lines:
-        words.append(Word(base_form=base_form, changed_form=changed_form))
-    insert_objects(Word, words, batch_size)
+        base_forms.append((base_form, changed_form))
+    insert_base_forms(base_forms, batch_size)
     logging.info('finish')
 
 def parse_stop_words(file, first_n_lines):
@@ -91,7 +116,7 @@ def parse_stop_words(file, first_n_lines):
     if first_n_lines > 0:
         lines = lines[:first_n_lines]
     stop_words = [line.strip().lower() for line in lines]
-    Word.objects.filter(base_form__in=stop_words).update(is_stop_word=True)
+    Word.objects.filter(value__in=stop_words).update(is_stop_word=True)
     logging.info('finish')
 
 def parse_articles_callback(batch_size, category_tag, redirect_tag, line):
@@ -139,6 +164,29 @@ def parse_articles(batch_size, file, category_tag, redirect_tag, first_n_lines, 
     pool.map(partial(parse_articles_callback, batch_size, category_tag, redirect_tag), lines)
     logging.info('finish')
 
+def update_articles_words_count(is_title):
+    logging.info('start update_articles_words_count is_title: %d' % is_title)
+    logging.info('reading stop words')
+    stop_words = list(map(lambda x: x['id'], Word.objects.filter(is_stop_word = True).values('id')))
+    articles = ArticleOccurrence.objects.values('article_id').filter(is_title=is_title).exclude(word_id__in=stop_words).annotate(count=Sum('positions_count'))
+    logging.info('reading articles words count')
+    i = 0
+    for article in articles:
+        i += 1
+        if i % 10000 == 0:
+            logging.info(article)
+            logging.info('iteration #%d' % i)
+        try:
+            if is_title:
+                Article.objects.filter(id=article['article_id']).update(title_words_count=article['count'])
+            else:
+                Article.objects.filter(id=article['article_id']).update(content_words_count=article['count'])
+        except Exception as e:
+            logging.warning('exception during update_articles_words_count:')
+            logging.warning(e)
+            logging.warning(article)
+    logging.info('finished update_articles_words_count')
+
 def run(*args):
     try:
         args = shlex.split(args[0])
@@ -175,3 +223,5 @@ def run(*args):
     preparse_articles(args.batch_size, args.json_articles_file, category_tag, first_n_lines, pool)
     parse_articles(args.batch_size, args.json_articles_file, category_tag, redirect_tag, first_n_lines, pool)
     parse_stop_words(args.stop_words_file, first_n_lines)
+    update_articles_words_count(True)
+    update_articles_words_count(False)

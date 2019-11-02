@@ -1,7 +1,8 @@
 django-extensions
-django-registration==2.4.1 
+django-registration==2.4.1
 django-bootstrap3
 django-bootstrap-form
 mysqlclient
 django-admin-tools
 django>=2.2
+gensim
