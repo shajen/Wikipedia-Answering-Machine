@@ -84,6 +84,7 @@ def run(*args):
         args = []
     parser = argparse.ArgumentParser()
     parser.add_argument("-t", "--threads", help="threads", type=int, default=1, choices=range(1, 33), metavar="int")
+    parser.add_argument("-q", "--questions", help="solve first n questions", type=int, default=10**9, metavar="n")
     parser.add_argument("-T", "--title", help="calculate based on articles title not content", action='store_true')
     parser.add_argument('-n', '--ngram', help="use ngram mode", type=int, default=1, metavar="ngram")
     parser.add_argument('-m', '--method', help="method name to make unique in database", type=str, default='', metavar="method")
@@ -96,7 +97,7 @@ def run(*args):
 
     tools.logger.configLogger(args.verbose)
 
-    questions = list(Question.objects.all())
+    questions = list(Question.objects.all())[:args.questions]
     dirPath = os.path.dirname(os.path.realpath(__file__))
     commit_hash = subprocess.check_output(['git', '-C', dirPath, 'rev-parse', '--short', 'HEAD']).decode('ascii').strip()
     commit_datetime = subprocess.check_output(['git', '-C', dirPath, 'log', '-1', '--format=%at']).decode('ascii').strip()
