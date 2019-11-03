@@ -97,15 +97,18 @@ class TfIdfWeightCalculator(calculators.weight_calculator.WeightCalculator):
         return question_words_weights
 
     def prepare(self, question, is_title):
+        logging.info('preparing')
         word_to_representer = TfIdfWeightCalculator.__get_words(question, True)
         (self.articles_words_count, self.articles_positions) = TfIdfWeightCalculator.__count_articles(word_to_representer, is_title, self.ngram)
         (self.articles_words_idf, questions_words_idf) = TfIdfWeightCalculator.__count_idf(self.articles_count, self.articles_words_count)
         self.question_words_weights = TfIdfWeightCalculator.__count_question_words_weights(question, self.questions_words_count, questions_words_idf, self.ngram)
 
-    def __count_tf_idf(self, question, sum_neighbors, minimal_word_idf, comparator):
-        articles_words_weights = defaultdict(defaultdict)
-        articles_weight = defaultdict()
+    def __count_tf_idf(self, question, sum_neighbors, minimal_word_idf, comparators):
+        logging.info('counting tf-idf')
+        comparators_articles_words_weights = defaultdict(lambda: defaultdict(lambda: defaultdict()))
+        comparators_articles_weight = defaultdict(lambda: defaultdict())
 
+        filtered_question_words_weights = dict(filter(lambda data: self.articles_words_idf[data[0]] > minimal_word_idf, self.question_words_weights.items()))
         for item_id in self.articles_words_count:
             max_weight = 0.0
             counter = defaultdict(lambda: 0)
@@ -130,23 +133,24 @@ class TfIdfWeightCalculator(calculators.weight_calculator.WeightCalculator):
                     weights[word_id] = count / item_words_count * self.articles_words_idf[word_id]
                 articles_words_set_weights.append(weights)
 
-            try:
-                filtered_question_words_weights = dict(filter(lambda data: self.articles_words_idf[data[0]] > minimal_word_idf, self.question_words_weights.items()))
-                (best_weight, best_words_weights) = comparator.get_best_score(filtered_question_words_weights, articles_words_set_weights)
-                for word_id in best_words_weights:
-                    articles_words_weights[item_id][word_id] = best_words_weights[word_id]
-                articles_weight[item_id] = best_weight
-            except ValueError as e:
-                logging.warn('exception during count articles weight')
-                logging.warn(e)
-                logging.warning('question: %s, article id: %s, fqww: %d, awsw: %d' % (question, item_id, len(filtered_question_words_weights), len(articles_words_set_weights)))
+            for comparator in comparators:
+                try:
+                    (best_weight, best_words_weights) = comparator.get_best_score(filtered_question_words_weights, articles_words_set_weights)
+                    for word_id in best_words_weights:
+                        comparators_articles_words_weights[comparator.method()][item_id][word_id] = best_words_weights[word_id]
+                    comparators_articles_weight[comparator.method()][item_id] = best_weight
+                except ValueError as e:
+                    logging.warn('exception during count articles weight')
+                    logging.warn(e)
+                    logging.warning('question: %s, article id: %s, fqww: %d, awsw: %d' % (question, item_id, len(filtered_question_words_weights), len(articles_words_set_weights)))
 
-        return (articles_words_weights, articles_weight)
+        return (comparators_articles_words_weights, comparators_articles_weight)
 
     def calculate(self, question, sum_neighbors, minimal_word_idf_weight, comparators):
+        (comparators_articles_words_weight, comparators_articles_weight) = self.__count_tf_idf(question, sum_neighbors, minimal_word_idf_weight, comparators)
         for comparator in comparators:
             logging.info('')
             logging.info('method %s' % comparator.method())
-            (articles_words_weight, articles_weight) = self.__count_tf_idf(question, sum_neighbors, minimal_word_idf_weight, comparator)
+            (articles_words_weight, articles_weight) = (comparators_articles_words_weight[comparator.method()], comparators_articles_weight[comparator.method()])
             positions = self._count_positions(question, articles_words_weight, articles_weight, comparator.ascending_order(), Article.objects, Word.objects)
             self._upload_positions(positions, comparator.method())
