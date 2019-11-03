@@ -21,33 +21,13 @@ class WeightComparator:
     def ascending_order(self):
         return self.__ascending_order
 
-    def __dict_to_vector(self, keys, d):
-        v = []
-        for key in keys:
-            try:
-                v.append(d[key])
-            except:
-                v.append(0.0)
-        return v
-
-    def get_best_score(self, question_words_weights, words_set_weights):
-        articles_weight = {}
-        keys = question_words_weights.keys()
-        # logging.info(question_words_weights)
-        # keys = list(map(lambda x: x[0], sorted(question_words_weights.items(), key=operator.itemgetter(1), reverse=True)))
-        # logging.info(keys)
-        # keys = keys[:3]
-        question_vector = self.__dict_to_vector(keys, question_words_weights)
-        vectors = []
-        for weights in words_set_weights:
-            vectors.append(self.__dict_to_vector(keys, weights))
-
+    def get_best_score(self, question_vector, vectors, words_set_weights):
         distances = cdist([question_vector], vectors, self.__distance_function)
         if self.__ascending_order:
             i = np.argmax(distances[0])
         else:
             i = np.argmin(distances[0])
-        return (distances[0][i], words_set_weights[i])
+        return (distances[0][i], i)
 
 class CosineWeightComparator(WeightComparator):
     def __init__(self, method_name, sum_neighbors):
@@ -73,9 +53,10 @@ class TfIdfWeightComparator:
     def ascending_order(self):
         return True
 
-    def get_best_score(self, question_words_weights, words_set_weights):
+    def get_best_score(self, question_vector, vectors, words_set_weights):
+        # distances = np.power(np.sum(vectors, axis=1), np.count_nonzero(vectors, axis=1))
         distances = []
         for weights in words_set_weights:
             distances.append(sum(weights.values()) * math.pow(len(weights), self.__power_factor))
         i = np.argmax(distances)
-        return (distances[i], words_set_weights[i])
+        return (distances[i], i)

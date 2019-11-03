@@ -103,6 +103,23 @@ class TfIdfWeightCalculator(calculators.weight_calculator.WeightCalculator):
         (self.articles_words_idf, questions_words_idf) = TfIdfWeightCalculator.__count_idf(self.articles_count, self.articles_words_count)
         self.question_words_weights = TfIdfWeightCalculator.__count_question_words_weights(question, self.questions_words_count, questions_words_idf, self.ngram)
 
+    def __dict_to_vector(keys, d):
+        v = []
+        for key in keys:
+            try:
+                v.append(d[key])
+            except:
+                v.append(0.0)
+        return v
+
+    def __convert_to_vector(question_words_weights, words_set_weights):
+        keys = question_words_weights.keys()
+        question_vector = TfIdfWeightCalculator.__dict_to_vector(keys, question_words_weights)
+        vectors = []
+        for weights in words_set_weights:
+            vectors.append(TfIdfWeightCalculator.__dict_to_vector(keys, weights))
+        return (question_vector, vectors)
+
     def __count_tf_idf(self, question, sum_neighbors, minimal_word_idf, comparators):
         logging.info('counting tf-idf')
         comparators_articles_words_weights = defaultdict(lambda: defaultdict(lambda: defaultdict()))
@@ -133,9 +150,11 @@ class TfIdfWeightCalculator(calculators.weight_calculator.WeightCalculator):
                     weights[word_id] = count / item_words_count * self.articles_words_idf[word_id]
                 articles_words_set_weights.append(weights)
 
+            (question_vector, vectors) = TfIdfWeightCalculator.__convert_to_vector(filtered_question_words_weights, articles_words_set_weights)
             for comparator in comparators:
                 try:
-                    (best_weight, best_words_weights) = comparator.get_best_score(filtered_question_words_weights, articles_words_set_weights)
+                    (best_weight, best_words_weights_index) = comparator.get_best_score(question_vector, vectors, articles_words_set_weights)
+                    best_words_weights = articles_words_set_weights[best_words_weights_index]
                     for word_id in best_words_weights:
                         comparators_articles_words_weights[comparator.method()][item_id][word_id] = best_words_weights[word_id]
                     comparators_articles_weight[comparator.method()][item_id] = best_weight
