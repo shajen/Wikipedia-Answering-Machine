@@ -7,6 +7,7 @@ import math
 import numpy as np
 import operator
 import re
+import tensorflow as tf
 
 class WeightComparator:
     def __init__(self, method_name, sum_neighbors, ascending_order, distance_function):
@@ -55,6 +56,7 @@ class TfIdfWeightComparator:
 
     def get_best_score(self, question_vector, vectors, words_set_weights):
         # distances = np.power(np.sum(vectors, axis=1), np.count_nonzero(vectors, axis=1))
+        # distances = tf.math.pow(tf.math.reduce_sum(tf.constant(vectors, dtype=tf.float32), axis=1), tf.dtypes.cast(tf.math.count_nonzero(vectors, axis=1), tf.float32)).numpy()
         distances = []
         for weights in words_set_weights:
             distances.append(sum(weights.values()) * math.pow(len(weights), self.__power_factor))
