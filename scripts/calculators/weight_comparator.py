@@ -16,6 +16,14 @@ class WeightComparator:
         self.__ascending_order = ascending_order
         self.__distance_function = distance_function
 
+    def has_already_solutions(self, question):
+        try:
+            answers = Answer.objects.filter(question=question).values_list('id', flat=True)
+            method = Method.objects.get(name=self.method())
+            return Solution.objects.filter(method=method, answer_id__in=answers).count() > 0
+        except Exception as e:
+            return False
+
     def method(self):
         return self.__method_name + (", type: %s_vector_%03d_neighbors" % (self.__distance_function, self.__sum_neighbors))
 
@@ -42,7 +50,7 @@ class CityblockWeightComparator(WeightComparator):
     def __init__(self, method_name, sum_neighbors):
         super().__init__(method_name, sum_neighbors, False, 'cityblock')
 
-class TfIdfWeightComparator:
+class TfIdfWeightComparator(WeightComparator):
     def __init__(self, method_name, sum_neighbors, power_factor):
         self.__method_name = method_name
         self.__sum_neighbors = sum_neighbors
