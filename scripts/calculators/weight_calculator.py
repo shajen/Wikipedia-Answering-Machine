@@ -7,16 +7,9 @@ import operator
 
 class WeightCalculator:
     def __init__(self, debug_top_items):
-        logging.info('start reading articles')
         self.debug_top_items = debug_top_items
-        articles = Article.objects.values('id', 'title_words_count', 'content_words_count', 'title')
-        self.articles_title_count = {}
-        self.articles_content_count = {}
-        self.articles_title = {}
-        for article in articles:
-            self.articles_title_count[article['id']] = article['title_words_count']
-            self.articles_content_count[article['id']] = article['content_words_count']
-            self.articles_title[article['id']] = article['title']
+        logging.info('start reading articles')
+        self.articles_count = Article.objects.filter(content_words_count__gte=20).count()
         logging.info('finish reading')
 
     def __print_item(self, item_id, items_weight, items_id_weights, item_objects, id_objects):
@@ -31,7 +24,8 @@ class WeightCalculator:
             keys = list(map(lambda x: x[0], sorted(items_id_weights[item_id].items(), key=operator.itemgetter(1), reverse=True)))
             for id in keys:
                 weight = items_id_weights[item_id][id]
-                logging.debug('  - %8d: %3.6f - %s' % (id, weight, id_objects.get(id=id)))
+                id_string = ', '.join(list(map(lambda x: str(id_objects.get(id=x)), list(id))))
+                logging.debug('  - %-40s - %3.6f' % (id_string, weight))
 
     def __get_article_position(self, items_ranking, item_id):
         for i in range(len(items_ranking)):

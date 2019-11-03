@@ -1,4 +1,4 @@
-from collections import defaultdict, deque
+from collections import defaultdict, deque, Counter
 from data.models import *
 import calculators.weight_calculator
 import logging
@@ -6,12 +6,14 @@ import math
 import re
 
 class TfIdfWeightCalculator(calculators.weight_calculator.WeightCalculator):
-    def __init__(self, debug_top_items):
+    def __init__(self, debug_top_items, ngram):
         super().__init__(debug_top_items)
+        self.ngram = ngram
         logging.info('start parsing questions')
         self.questions_words_count = defaultdict(lambda: 0)
-        for word in QuestionOccurrence.objects.values_list('word', flat=True):
-            self.questions_words_count[word] += 1
+        for question in Question.objects.all():
+            for word in question.get_ngrams(ngram):
+                self.questions_words_count[word] += 1
         logging.info('finish parsing questions')
 
     def __get_words(question, debug=False):
@@ -34,7 +36,7 @@ class TfIdfWeightCalculator(calculators.weight_calculator.WeightCalculator):
                 logging.debug('%s (%s)' % (Word.objects.get(id=representer), words))
         return word_to_representer
 
-    def __count_articles(word_to_representer, is_title):
+    def __count_articles(word_to_representer, is_title, ngram):
         articles_words_count = defaultdict(lambda: defaultdict(lambda: 0))
         # articles_words_positions = defaultdict(defaultdict)
         articles_positions = defaultdict(list)
@@ -49,9 +51,19 @@ class TfIdfWeightCalculator(calculators.weight_calculator.WeightCalculator):
 
         for item_id in articles_positions:
             articles_positions[item_id].sort(key=lambda d: d[0])
-        return (articles_words_count, articles_positions)
 
-    def __count_idf(articles_title_count, articles_words_count):
+        articles_words_count_ngram = defaultdict(lambda: defaultdict(lambda: 0))
+        articles_positions_ngram = defaultdict(list)
+        for item_id in articles_positions:
+            for i in range(0, len(articles_positions[item_id]) - ngram + 1):
+                current_positions = articles_positions[item_id][i:i+ngram]
+                if current_positions[-1][0] - current_positions[0][0] == ngram - 1:
+                    word = tuple(list(map(lambda position: position[1], current_positions)))
+                    articles_positions_ngram[item_id].append((current_positions[0][0], word))
+                    articles_words_count_ngram[item_id][word] += 1
+        return (articles_words_count_ngram, articles_positions_ngram)
+
+    def __count_idf(articles_count, articles_words_count):
         words_articles_count = defaultdict(lambda: 0)
         for item_id in articles_words_count:
             for word_id in articles_words_count[item_id]:
@@ -60,32 +72,35 @@ class TfIdfWeightCalculator(calculators.weight_calculator.WeightCalculator):
         articles_words_idf = {}
         questions_words_idf = {}
         for word_id in words_articles_count:
-            articles_words_idf[word_id] = math.log(len(articles_title_count) / words_articles_count[word_id])
+            articles_words_idf[word_id] = math.log(articles_count / words_articles_count[word_id])
             questions_words_idf[word_id] = articles_words_idf[word_id]
 
         # for word in set(word_to_representer.values()):
         #     questions_words_idf[word] = math.log(Question.objects.count() / questions_words_count[word])
         return (articles_words_idf, questions_words_idf)
 
-    def __count_question_words_weights(question, word_to_representer, questions_words_count, questions_words_idf):
+    def __count_question_words_weights(question, questions_words_count, questions_words_idf, ngram):
         logging.debug('question words weights')
         question_words_weights = {}
-        for word in set(word_to_representer.values()):
+        words = question.get_ngrams(ngram)
+        for (word, count) in Counter(words).items():
             try:
-                tf = 1.0 / len(set(word_to_representer.values()))
+                tf = count / len(words)
                 question_words_weights[word] = tf * questions_words_idf[word]
-                logging.debug(' - %-40s %.6f (%3d)' % (Word.objects.get(id=word), question_words_weights[word], questions_words_count[word]))
+                word_string = ', '.join(list(map(lambda x: str(Word.objects.get(id=x)), list(word))))
+                logging.debug(' - %-40s %d %.6f (%3d)' % (word_string, count, question_words_weights[word], questions_words_count[word]))
             except Exception as e:
-                logging.warning('exception during count question words weights')
-                logging.warning(e)
-                logging.warning('question: %s, word: %s' % (question, word))
+                pass
+                #logging.warning('exception during count question words weights')
+                #logging.warning(e)
+                #logging.warning('question: %s, word: %s' % (question, word))
         return question_words_weights
 
     def prepare(self, question, is_title):
         word_to_representer = TfIdfWeightCalculator.__get_words(question, True)
-        (self.articles_words_count, self.articles_positions) = TfIdfWeightCalculator.__count_articles(word_to_representer, is_title)
-        (self.articles_words_idf, questions_words_idf) = TfIdfWeightCalculator.__count_idf(self.articles_title_count, self.articles_words_count)
-        self.question_words_weights = TfIdfWeightCalculator.__count_question_words_weights(question, word_to_representer, self.questions_words_count, questions_words_idf)
+        (self.articles_words_count, self.articles_positions) = TfIdfWeightCalculator.__count_articles(word_to_representer, is_title, self.ngram)
+        (self.articles_words_idf, questions_words_idf) = TfIdfWeightCalculator.__count_idf(self.articles_count, self.articles_words_count)
+        self.question_words_weights = TfIdfWeightCalculator.__count_question_words_weights(question, self.questions_words_count, questions_words_idf, self.ngram)
 
     def __count_tf_idf(self, question, sum_neighbors, minimal_word_idf, comparator):
         articles_words_weights = defaultdict(defaultdict)

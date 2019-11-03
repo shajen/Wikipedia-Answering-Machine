@@ -18,8 +18,8 @@ import calculators.tf_idf_weight_calculator
 import calculators.weight_comparator
 import tools.logger
 
-def resolve_questions(questions_queue, method_name, is_title, debug_top_items, neighbors, minimal_word_idf_weights, power_factors):
-    tf_idf_calculator = calculators.tf_idf_weight_calculator.TfIdfWeightCalculator(debug_top_items)
+def resolve_questions(questions_queue, method_name, is_title, ngram, debug_top_items, neighbors, minimal_word_idf_weights, power_factors):
+    tf_idf_calculator = calculators.tf_idf_weight_calculator.TfIdfWeightCalculator(debug_top_items, ngram)
     # links_wc = calculators.links_weight_calculator.LinksWeightCalculator(debug_top_items)
     # categories_wc = calculators.categories_weight_calculator.CategoriesWeightCalculator(debug_top_items)
 
@@ -65,7 +65,7 @@ def resolve_questions(questions_queue, method_name, is_title, debug_top_items, n
         except queue.Empty:
             break
 
-def start(questions, num_threads, method_name, is_title, debug_top_items, neighbors, minimal_word_idf_weights, power_factors):
+def start(questions, num_threads, method_name, is_title, ngram, debug_top_items, neighbors, minimal_word_idf_weights, power_factors):
     logging.info('start')
     logging.info('threads: %d' % num_threads)
     logging.info('debug_top_items: %d' % debug_top_items)
@@ -81,7 +81,7 @@ def start(questions, num_threads, method_name, is_title, debug_top_items, neighb
 
     threads = []
     for i in range(num_threads):
-        thread = multiprocessing.Process(target=resolve_questions, args=(questions_queue, method_name, is_title, debug_top_items, neighbors, minimal_word_idf_weights, power_factors))
+        thread = multiprocessing.Process(target=resolve_questions, args=(questions_queue, method_name, is_title, ngram, debug_top_items, neighbors, minimal_word_idf_weights, power_factors))
         thread.start()
         threads.append(thread)
 
@@ -97,6 +97,7 @@ def run(*args):
     parser = argparse.ArgumentParser()
     parser.add_argument("-t", "--threads", help="threads", type=int, default=1, choices=range(1, 33), metavar="int")
     parser.add_argument("-T", "--title", help="calculate based on articles title not content", action='store_true')
+    parser.add_argument('-n', '--ngram', help="use ngram mode", type=int, default=1, metavar="ngram")
     parser.add_argument('-m', '--method', help="method name to make unique in database", type=str, default='', metavar="method")
     parser.add_argument("-dti", "--debug_top_items", help="print top n items in debug", type=int, default=3, metavar="int")
     parser.add_argument("-mwiw", "--minimal_word_idf_weight", help="use only words with idf weight above", type=float, default=0.0, metavar="float")
@@ -110,7 +111,7 @@ def run(*args):
     dirPath = os.path.dirname(os.path.realpath(__file__))
     commit_hash = subprocess.check_output(['git', '-C', dirPath, 'rev-parse', '--short', 'HEAD']).decode('ascii').strip()
     commit_datetime = subprocess.check_output(['git', '-C', dirPath, 'log', '-1', '--format=%at']).decode('ascii').strip()
-    method_name = 'date: %s, git: %s, title: %d' % (commit_datetime, commit_hash, args.title)
+    method_name = 'date: %s, git: %s, title: %d, ngram: %d' % (commit_datetime, commit_hash, args.title, args.ngram)
     if args.method:
         method_name = 'name: %s, %s' % (args.method, method_name)
     # neighbors = [0, 1, 3, 5, 10, 15, 20, 30, 50, 100, 150, 200, 250, 500]
@@ -119,4 +120,4 @@ def run(*args):
     # minimal_word_idf_weights = [0.0, 0.25, 0.5, 0.75, 1.0, 1,5]
     power_factors = [args.power_factor]
     # power_factors = [1.0, 2.0, 3.0, 4.0]
-    start(questions, args.threads, method_name, args.title, args.debug_top_items, neighbors, minimal_word_idf_weights, power_factors)
+    start(questions, args.threads, method_name, args.title, args.ngram, args.debug_top_items, neighbors, minimal_word_idf_weights, power_factors)
