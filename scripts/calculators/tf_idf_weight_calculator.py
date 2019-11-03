@@ -36,7 +36,7 @@ class TfIdfWeightCalculator(calculators.weight_calculator.WeightCalculator):
                 logging.debug('%s (%s)' % (Word.objects.get(id=representer), words))
         return word_to_representer
 
-    def __count_articles(word_to_representer, is_title, ngram):
+    def __count_articles(words, word_to_representer, is_title, ngram):
         articles_words_count = defaultdict(lambda: defaultdict(lambda: 0))
         # articles_words_positions = defaultdict(defaultdict)
         articles_positions = defaultdict(list)
@@ -59,8 +59,9 @@ class TfIdfWeightCalculator(calculators.weight_calculator.WeightCalculator):
                 current_positions = articles_positions[item_id][i:i+ngram]
                 if current_positions[-1][0] - current_positions[0][0] == ngram - 1:
                     word = tuple(list(map(lambda position: position[1], current_positions)))
-                    articles_positions_ngram[item_id].append((current_positions[0][0], word))
-                    articles_words_count_ngram[item_id][word] += 1
+                    if word in words:
+                        articles_positions_ngram[item_id].append((current_positions[0][0], word))
+                        articles_words_count_ngram[item_id][word] += 1
         return (articles_words_count_ngram, articles_positions_ngram)
 
     def __count_idf(articles_count, articles_words_count):
@@ -79,10 +80,9 @@ class TfIdfWeightCalculator(calculators.weight_calculator.WeightCalculator):
         #     questions_words_idf[word] = math.log(Question.objects.count() / questions_words_count[word])
         return (articles_words_idf, questions_words_idf)
 
-    def __count_question_words_weights(question, questions_words_count, questions_words_idf, ngram):
+    def __count_question_words_weights(question, words, questions_words_count, questions_words_idf):
         logging.debug('question words weights')
         question_words_weights = {}
-        words = question.get_ngrams(ngram)
         for (word, count) in Counter(words).items():
             try:
                 tf = count / len(words)
@@ -99,9 +99,10 @@ class TfIdfWeightCalculator(calculators.weight_calculator.WeightCalculator):
     def prepare(self, question, is_title):
         logging.info('preparing')
         word_to_representer = TfIdfWeightCalculator.__get_words(question, True)
-        (self.articles_words_count, self.articles_positions) = TfIdfWeightCalculator.__count_articles(word_to_representer, is_title, self.ngram)
+        words = question.get_ngrams(self.ngram)
+        (self.articles_words_count, self.articles_positions) = TfIdfWeightCalculator.__count_articles(words, word_to_representer, is_title, self.ngram)
         (self.articles_words_idf, questions_words_idf) = TfIdfWeightCalculator.__count_idf(self.articles_count, self.articles_words_count)
-        self.question_words_weights = TfIdfWeightCalculator.__count_question_words_weights(question, self.questions_words_count, questions_words_idf, self.ngram)
+        self.question_words_weights = TfIdfWeightCalculator.__count_question_words_weights(question, words, self.questions_words_count, questions_words_idf)
 
     def __dict_to_vector(keys, d):
         v = []
