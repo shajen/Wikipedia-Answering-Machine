@@ -29,7 +29,7 @@ class TfIdfWeightCalculator(calculators.weight_calculator.WeightCalculator):
 
         if debug:
             for representer in set(word_to_representer.values()):
-                words = list(filter(lambda data: data[1] == representer, word_to_representer.items()))
+                words = filter(lambda data: data[1] == representer, word_to_representer.items())
                 words = list(map(lambda data: data[0], words))
                 words = Word.objects.filter(id__in=words).values_list('value', flat=True)
                 words = ', '.join(words)
@@ -127,28 +127,33 @@ class TfIdfWeightCalculator(calculators.weight_calculator.WeightCalculator):
 
         filtered_question_words_weights = dict(filter(lambda data: self.articles_words_idf[data[0]] > minimal_word_idf, self.question_words_weights.items()))
         for item_id in self.articles_words_count:
-            max_weight = 0.0
-            counter = defaultdict(lambda: 0)
-            words_positions = list(filter(lambda data: self.articles_words_idf[data[1]] > minimal_word_idf, self.articles_positions[item_id]))
-            current_words = deque()
             articles_words_set_weights = []
-
-            item_words_count = (len(self.articles_positions[item_id]) if sum_neighbors == 0 else (sum_neighbors+1))
-            if not words_positions:
-                continue
-            for data in words_positions:
-                current_words.append(data)
-                counter[data[1]] += 1
-                while current_words[0][0] + (10**9 if sum_neighbors == 0 else sum_neighbors) < current_words[-1][0]:
-                    pop_data = current_words.popleft()
-                    counter[pop_data[1]] -= 1
-                    if counter[pop_data[1]] == 0:
-                        del counter[pop_data[1]]
-
+            words_positions = filter(lambda data: self.articles_words_idf[data[1]] > minimal_word_idf, self.articles_positions[item_id])
+            words_positions = self.articles_positions[item_id]
+            if sum_neighbors == 0:
+                current_words = map(lambda data: data[1], words_positions)
                 weights = {}
-                for word_id, count in counter.items():
-                    weights[word_id] = count / item_words_count * self.articles_words_idf[word_id]
+                for word_id, count in Counter(current_words).items():
+                    weights[word_id] = count / len(self.articles_positions[item_id]) * self.articles_words_idf[word_id]
                 articles_words_set_weights.append(weights)
+            else:
+                counter = defaultdict(lambda: 0)
+                current_words = deque()
+                if not words_positions:
+                    continue
+                for data in words_positions:
+                    current_words.append(data)
+                    counter[data[1]] += 1
+                    while current_words[0][0] + sum_neighbors < current_words[-1][0]:
+                        pop_data = current_words.popleft()
+                        counter[pop_data[1]] -= 1
+                        if counter[pop_data[1]] == 0:
+                            del counter[pop_data[1]]
+
+                    weights = {}
+                    for word_id, count in counter.items():
+                        weights[word_id] = count / sum_neighbors * self.articles_words_idf[word_id]
+                    articles_words_set_weights.append(weights)
 
             (question_vector, vectors) = TfIdfWeightCalculator.__convert_to_vector(filtered_question_words_weights, articles_words_set_weights)
             for comparator in comparators:
