@@ -100,8 +100,9 @@ def run(*args):
     parser.add_argument('-n', '--ngram', help="use ngram mode", type=int, default=1, metavar="ngram")
     parser.add_argument('-m', '--method', help="method name to make unique in database", type=str, default='', metavar="method")
     parser.add_argument("-dti", "--debug_top_items", help="print top n items in debug", type=int, default=3, metavar="int")
-    parser.add_argument("-mwiw", "--minimal_word_idf_weight", help="use only words with idf weight above", type=float, default=0.0, metavar="float")
-    parser.add_argument("-pf", "--power_factor", help="use to sum words weight in count article weight", type=float, default=0.0, metavar="float")
+    parser.add_argument("-N", "--neighbors", help="count tf-idf in every n neighboring words tuple in articles", type=str, default='0', metavar="0,10,20")
+    parser.add_argument("-mwiw", "--minimal_word_idf_weights", help="use only words with idf weight above", type=str, default='0.0', metavar="0.0,1.6,3.2")
+    parser.add_argument("-pf", "--power_factors", help="use to sum words weight in count article weight", type=str, default='4', metavar="1,2,3,4")
     parser.add_argument('-v', '--verbose', action='count', default=0)
     args = parser.parse_args(args)
 
@@ -114,10 +115,7 @@ def run(*args):
     method_name = 'date: %s, git: %s, title: %d, ngram: %d' % (commit_datetime, commit_hash, args.title, args.ngram)
     if args.method:
         method_name = 'name: %s, %s' % (args.method, method_name)
-    # neighbors = [0, 1, 3, 5, 10, 15, 20, 30, 50, 100, 150, 200, 250, 500]
-    neighbors = [5, 10, 20, 50, 100, 150, 200, 250, 500]
-    minimal_word_idf_weights = [args.minimal_word_idf_weight]
-    # minimal_word_idf_weights = [0.0, 0.25, 0.5, 0.75, 1.0, 1,5]
-    power_factors = [args.power_factor]
-    # power_factors = [1.0, 2.0, 3.0, 4.0]
+    neighbors = list(map(lambda x: int(x), args.neighbors.split(',')))
+    minimal_word_idf_weights = list(map(lambda x: float(x), args.minimal_word_idf_weights.split(',')))
+    power_factors = list(map(lambda x: int(x), args.power_factors.split(',')))
     start(questions, args.threads, method_name, args.title, args.ngram, args.debug_top_items, neighbors, minimal_word_idf_weights, power_factors)
