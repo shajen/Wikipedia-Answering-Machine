@@ -9,6 +9,7 @@ import logging
 import multiprocessing
 import numpy as np
 import os
+import re
 import shlex
 import smart_open
 import sys
@@ -102,7 +103,7 @@ def preparse_polimorfologik(batch_size, file, category_tag, first_n_lines):
     lines = list(open(file, 'r'))
     if first_n_lines > 0:
         lines = lines[:first_n_lines]
-    lines = list(set([tuple(line.strip().lower().split('\t')[:2]) for line in lines]))
+    lines = list(set([tuple(re.split("[\t;]", line.strip().lower())[:2]) for line in lines]))
     logging.info('inserting %d words\n' % len(lines))
     base_forms = []
     for (changed_form, base_form) in lines:

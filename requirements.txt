@@ -6,3 +6,5 @@ mysqlclient
 django-admin-tools
 django>=2.2
 gensim
+numpy
+mwparserfromhell

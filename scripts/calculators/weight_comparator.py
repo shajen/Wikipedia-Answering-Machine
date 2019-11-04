@@ -7,7 +7,7 @@ import math
 import numpy as np
 import operator
 import re
-import tensorflow as tf
+# import tensorflow as tf
 
 class WeightComparator:
     def __init__(self, method_name, sum_neighbors, ascending_order, distance_function):
@@ -20,7 +20,7 @@ class WeightComparator:
         try:
             answers = Answer.objects.filter(question=question).values_list('id', flat=True)
             method = Method.objects.get(name=self.method())
-            return Solution.objects.filter(method=method, answer_id__in=answers).count() > 0
+            return Solution.objects.filter(method=method, answer_id__in=answers).count() == len(answers)
         except Exception as e:
             return False
 

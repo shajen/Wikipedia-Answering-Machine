@@ -105,7 +105,7 @@ def run(*args):
     dirPath = os.path.dirname(os.path.realpath(__file__))
     commit_hash = subprocess.check_output(['git', '-C', dirPath, 'rev-parse', '--short', 'HEAD']).decode('ascii').strip()
     commit_datetime = subprocess.check_output(['git', '-C', dirPath, 'log', '-1', '--format=%at']).decode('ascii').strip()
-    method_name = 'date: %s, git: %s, title: %d, ngram: %d' % (commit_datetime, commit_hash, args.title, args.ngram)
+    method_name = 'git: %s_%s, title: %d, ngram: %d' % (commit_datetime, commit_hash, args.title, args.ngram)
     if args.method:
         method_name = 'name: %s, %s' % (args.method, method_name)
     neighbors = list(map(lambda x: int(x), args.neighbors.split(',')))

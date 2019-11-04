@@ -1,5 +1,6 @@
 __pycache__
-mgr_database.sqlite3
+*.pyc
+mgr_database.sqlite3*
 log/
 mysql_*
 files/*.json
