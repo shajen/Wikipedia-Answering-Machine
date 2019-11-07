@@ -85,7 +85,7 @@ def run(*args):
     except IndexError:
         args = []
     parser = argparse.ArgumentParser()
-    parser.add_argument("-t", "--threads", help="threads", type=int, default=1, choices=range(1, 33), metavar="int")
+    parser.add_argument("-t", "--threads", help="threads", type=int, default=1, choices=range(1, 129), metavar="int")
     parser.add_argument("-q", "--questions", help="solve first n questions", type=int, default=10**9, metavar="n")
     parser.add_argument("-T", "--title", help="calculate based on articles title not content", action='store_true')
     parser.add_argument('-n', '--ngram', help="use ngram mode", type=int, default=1, metavar="ngram")
