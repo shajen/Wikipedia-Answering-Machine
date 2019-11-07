@@ -8,3 +8,4 @@ django>=2.2
 gensim
 numpy
 mwparserfromhell
+termcolor
