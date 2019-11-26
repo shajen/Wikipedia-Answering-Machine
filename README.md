@@ -1,6 +1,6 @@
 # Wikipedia Answering Machine
 
-This project contains my Master Thesis work about answering wikipedia questions automatically. It uses Polish Wikipedia, but switching to another language should take a few minutes. You just need to change the Wikipedia dump.
+This project contains my Master Thesis work about answering wikipedia questions automatically. It uses Polish Wikipedia, but switching to another language should take a few minutes. You just need to change the Wikipedia dump and few polish keywords.
 
 ## Getting Started
 
@@ -30,17 +30,17 @@ pip3 install --user -r requirements.txt
 
 Run below commands in terminal:
 ```
-01-prepare_database.sh
-02-download_files.sh
-03-xml_to_json.sh
-04-parse_articles.sh
-05-parse_questions.sh
-06-resolve.sh
-07-report.sh
+./01-prepare_database.sh
+./02-download_files.sh
+./03-xml_to_json.sh
+./04-parse_articles.sh
+./05-parse_questions.sh
+./06-resolve.sh
+./07-report.sh
 ```
 or
 ```
-run_all.sh
+./run_all.sh
 ```
 Be patient, it may takes even a few hours or days, especially `06-resolve.sh` script.
 
