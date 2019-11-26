@@ -6,9 +6,9 @@ THREADS=$(grep -c ^processor /proc/cpuinfo)
 pushd $ROOT_PATH
 METHOD="test"
 NEIGHBORS="0"
-MINIMAL_IDF="0,1.6094379124341003,3.2188758248682006,4.8283137373023015,6.437751649736401"
+MINIMAL_IDF="0"
 PF="1,2,3,4"
-QUESTIONS="100000"
+QUESTIONS="100"
 MODELS="-tm -vm"
 
 ./manage.py runscript resolve --script-args="-t $THREADS -m $METHOD -N $NEIGHBORS -mwiw $MINIMAL_IDF -pf $PF -dti 3 -vvv -q $QUESTIONS $MODELS -n 1"
