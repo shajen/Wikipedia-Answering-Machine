@@ -6,6 +6,7 @@ mysqlclient
 django-admin-tools
 django>=2.2
 gensim
+pyemd
 numpy
 mwparserfromhell
 termcolor

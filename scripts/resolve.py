@@ -16,6 +16,7 @@ import calculators.categories_weight_calculator
 import calculators.links_weight_calculator
 import calculators.tf_idf_weight_calculator
 import calculators.weight_comparator
+import calculators.word2vec_weight_calculator
 import tools.logger
 
 def resolve_questions(questions_queue, method, is_title, ngram, debug_top_items, tfidf_models, vector_models, neighbors, minimal_word_idf_weights, power_factors):
@@ -55,16 +56,8 @@ def resolve_questions(questions_queue, method, is_title, ngram, debug_top_items,
         except queue.Empty:
             break
 
-def start(questions, num_threads, method_name, is_title, ngram, debug_top_items, tfidf_models, vector_models, neighbors, minimal_word_idf_weights, power_factors):
-    logging.info('start')
-    logging.info('threads: %d' % num_threads)
-    logging.info('debug_top_items: %d' % debug_top_items)
-    logging.info('method_name: %s' % method_name)
-    logging.info('neighbors: %s' % neighbors)
-    logging.info('minimal_word_idf_weights: %s' % minimal_word_idf_weights)
-    logging.info('power_factors: %s' % power_factors)
+def start_tfidf(questions, num_threads, method_name, is_title, ngram, debug_top_items, tfidf_models, vector_models, neighbors, minimal_word_idf_weights, power_factors):
     db.connections.close_all()
-
     questions_queue = multiprocessing.Queue()
     for question in questions:
         questions_queue.put(question)
@@ -77,6 +70,25 @@ def start(questions, num_threads, method_name, is_title, ngram, debug_top_items,
 
     for thread in threads:
         thread.join()
+
+def start_word2vec(questions, num_threads, method_name, is_title, debug_top_items, word2vec_model):
+    logging.getLogger("gensim").setLevel(logging.WARNING)
+    logging.getLogger("smart_open.smart_open_lib").setLevel(logging.WARNING)
+    word2vec_calculator = calculators.word2vec_weight_calculator.Word2VecWeightCalculator(debug_top_items, word2vec_model)
+    word2vec_calculator.calculate(questions, Article.objects.all(), method_name, is_title)
+
+def start(questions, num_threads, method_name, is_title, ngram, debug_top_items, tfidf_models, vector_models, word2vec_model, neighbors, minimal_word_idf_weights, power_factors):
+    logging.info('start')
+    logging.info('threads: %d' % num_threads)
+    logging.info('debug_top_items: %d' % debug_top_items)
+    logging.info('method_name: %s' % method_name)
+    logging.info('neighbors: %s' % neighbors)
+    logging.info('minimal_word_idf_weights: %s' % minimal_word_idf_weights)
+    logging.info('power_factors: %s' % power_factors)
+    if tfidf_models or vector_models:
+        start_tfidf(questions, num_threads, method_name, is_title, ngram, debug_top_items, tfidf_models, vector_models, neighbors, minimal_word_idf_weights, power_factors)
+    if word2vec_model:
+        start_word2vec(questions, num_threads, method_name, is_title, debug_top_items, word2vec_model)
     logging.info('finish')
 
 def run(*args):
@@ -91,6 +103,7 @@ def run(*args):
     parser.add_argument('-n', '--ngram', help="use ngram mode", type=int, default=1, metavar="ngram")
     parser.add_argument("-tm", "--tfidf_models", help="use td-idf models", action='store_true')
     parser.add_argument("-vm", "--vector_models", help="use vector models", action='store_true')
+    parser.add_argument("-w2vm", "--word2vec_model", help="use word2vec model", type=str, default='', metavar="file")
     parser.add_argument('-m', '--method', help="method name to make unique in database", type=str, default='', metavar="method")
     parser.add_argument("-dti", "--debug_top_items", help="print top n items in debug", type=int, default=3, metavar="int")
     parser.add_argument("-N", "--neighbors", help="count tf-idf in every n neighboring words tuple in articles", type=str, default='0', metavar="0,10,20")
@@ -111,4 +124,4 @@ def run(*args):
     neighbors = list(map(lambda x: int(x), args.neighbors.split(',')))
     minimal_word_idf_weights = list(map(lambda x: float(x), args.minimal_word_idf_weights.split(',')))
     power_factors = list(map(lambda x: int(x), args.power_factors.split(',')))
-    start(questions, args.threads, method_name, args.title, args.ngram, args.debug_top_items, args.tfidf_models, args.vector_models, neighbors, minimal_word_idf_weights, power_factors)
+    start(questions, args.threads, method_name, args.title, args.ngram, args.debug_top_items, args.tfidf_models, args.vector_models, args.word2vec_model, neighbors, minimal_word_idf_weights, power_factors)
