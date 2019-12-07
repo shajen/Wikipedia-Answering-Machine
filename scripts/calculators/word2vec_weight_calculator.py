@@ -21,27 +21,35 @@ class Word2VecWeightCalculator(calculators.weight_calculator.WeightCalculator):
         self.__stop_words = set(Word.objects.filter(is_stop_word=True).values_list('id', flat=True))
         logging.info('stop words: %d' % len(self.__stop_words))
 
-        logging.info('start reading words base forms')
-        self.__word_id_to_word_base_form_id = defaultdict(list)
-        for wordForm in WordForm.objects.all().values('base_word_id', 'changed_word_id'):
-            self.__word_id_to_word_base_form_id[wordForm['changed_word_id']].append(wordForm['base_word_id'])
-        logging.info('words base forms: %d' % len(self.__word_id_to_word_base_form_id))
-
-        logging.info('start reading words vectors')
-        self.__word_id_to_vector = {}
-        for word in Word.objects.filter(is_stop_word=False).values('id', 'value'):
-            try:
-                self.__word_id_to_vector[word['id']] = self.__word2vec_model.get_vector(word['value'])
-            except KeyError:
-                pass
-        logging.info('words vectors: %d' % len(self.__word_id_to_vector))
-
         logging.info('finish')
 
-    def __words_id_to_vector(self, ids):
+    def __get_similar_words_id(self, ids, topn):
+        similar_words = []
+        for word in Word.objects.filter(id__in=ids).values_list('value', flat=True):
+            try:
+                # logging.debug(word)
+                for (similar_word, distance) in self.__word2vec_model.most_similar(word, topn=topn):
+                    # logging.debug('  %s %.6f' % (similar_word, distance))
+                    similar_words.append(similar_word)
+            except KeyError:
+                pass
+        return list(Word.objects.filter(value__in=similar_words).values_list('id', flat=True)) + ids
+
+    def __get_words_changed_forms_id(self, ids):
+        return list(WordForm.objects.filter(base_word_id__in=ids).values_list('changed_word_id', flat=True))# + ids
+
+    def __filter_stop_words_id(self, ids):
+        return list(filter(lambda id: id not in self.__stop_words, ids))
+
+    def __words_id_to_words_base_forms_id(self, ids):
+        ids = self.__filter_stop_words_id(ids)
         ids = list(filter(lambda id: id in self.__word_id_to_word_base_form_id, ids))
         ids = list(map(lambda id: self.__word_id_to_word_base_form_id[id], ids))
         ids = list(reduce(lambda x, y: x + y, ids, []))
+        ids = self.__filter_stop_words_id(ids)
+        return ids
+
+    def __words_id_to_data(self, ids):
         ids = list(filter(lambda id: id in self.__word_id_to_vector, ids))
         data = list(map(lambda id: self.__word_id_to_vector[id], ids))
         if data:
@@ -49,40 +57,70 @@ class Word2VecWeightCalculator(calculators.weight_calculator.WeightCalculator):
         else:
             return np.zeros(100)
 
-    def __get_article_words(self, article_id, is_title):
-        return list(ArticleOccurrence.objects.filter(article_id=article_id, is_title=is_title).values_list('word_id', flat=True))
+    def __get_question_words_id(self, question):
+        return list(QuestionOccurrence.objects.filter(question_id=question.id).values_list('word_id', flat=True))
 
-    def __get_question_words(self, question_id):
-        return list(QuestionOccurrence.objects.filter(question_id=question_id).values_list('word_id', flat=True))
+    def __get_articles_words_id(self, words_id, is_title):
+        articles_words_id = defaultdict(list)
+        for (article_id, word_id) in ArticleOccurrence.objects.filter(is_title=is_title, word_id__in=words_id).values_list('article_id', 'word_id'):
+            articles_words_id[article_id].append(word_id)
+        return articles_words_id
 
-    def __prepare_vectros(self, questions, articles, is_title):
-        logging.info('preparing questions')
+    def __load_words_id_vectors(self, ids):
+        logging.info('start reading words vectors')
+        self.__word_id_to_vector = {}
+        for (id, word) in Word.objects.filter(is_stop_word=False).filter(id__in=ids).values_list('id', 'value'):
+            try:
+                self.__word_id_to_vector[id] = self.__word2vec_model.get_vector(word)
+            except KeyError:
+                pass
+        logging.info('words vectors: %d' % len(self.__word_id_to_vector))
 
-        questions_id = []
-        questions_vectors = []
-        for question in questions:
-            questions_id.append(question.id)
-            questions_vectors.append(self.__words_id_to_vector(self.__get_question_words(question.id)))
-        questions_vectors = np.array(questions_vectors)
-        logging.info('questions size: %s' % str(questions_vectors.shape))
+    def __load_words_id_base_form_id(self, ids):
+        logging.info('start reading words base forms')
+        self.__word_id_to_word_base_form_id = defaultdict(list)
+        for (base_word_id, changed_word_id) in WordForm.objects.filter(changed_word_id__in=ids).values_list('base_word_id', 'changed_word_id'):
+            self.__word_id_to_word_base_form_id[changed_word_id].append(base_word_id)
+        for id in ids:
+            self.__word_id_to_word_base_form_id[id].append(id)
+        logging.info('words base forms: %d' % len(self.__word_id_to_word_base_form_id))
 
-        logging.info('preparing articles')
+    def __prepare_data(self, question, is_title, topn):
+        logging.info('preparing question')
+
+        question_words_id = self.__get_question_words_id(question)
+        logging.info('words count %d' % len(question_words_id))
+
+        self.__load_words_id_base_form_id(question_words_id)
+        question_words_id = self.__words_id_to_words_base_forms_id(question_words_id)
+        xxx = question_words_id
+        logging.info('words base forms count %d' % len(question_words_id))
+
+        question_words_id = self.__get_similar_words_id(question_words_id, topn)
+        logging.info('similar words count %d' % len(question_words_id))
+
+        question_words_id = self.__get_words_changed_forms_id(question_words_id) + xxx
+        logging.info('changed form similar words count %d' % len(question_words_id))
+
+        self.__load_words_id_vectors(question_words_id)
+        self.__load_words_id_base_form_id(question_words_id)
+        question_data = self.__words_id_to_data(xxx)
+        question_data = np.array(question_data)
+        logging.info('reading articles')
+        articles_words_id = self.__get_articles_words_id(question_words_id, is_title)
         articles_id = []
-        articles_vectors = []
-        i = 0
-        for article in articles:
-            i += 1
-            if i % 10000 == 0:
-                logging.info('iteration #%d' % i)
-            articles_id.append(article.id)
-            articles_vectors.append(self.__words_id_to_vector(self.__get_article_words(article.id, is_title)))
-        articles_vectors = np.array(articles_vectors)
-        logging.info('articles size: %s' % str(articles_vectors.shape))
+        articles_data = []
+        logging.info('preparing articles data')
+        for article_id in articles_words_id:
+            articles_id.append(article_id)
+            articles_data.append(self.__words_id_to_data(self.__words_id_to_words_base_forms_id(articles_words_id[article_id])))
+        articles_data = np.array(articles_data)
+        logging.info('articles size: %s' % str(articles_data.shape))
 
-        return (questions_id, questions_vectors, articles_id, articles_vectors)
+        return (question_data, articles_id, articles_data)
 
-    def __calculate_distances(self, question_vector, articles_vectors):
-        return scipy.spatial.distance.cdist(np.array([question_vector]), articles_vectors, 'cosine')[0]
+    def __calculate_distances(self, question_data, articles_data):
+        return scipy.spatial.distance.cdist(np.array([question_data]), articles_data, 'cosine')[0]
 
     def __colored(self, text, colour):
         return colored(text, colour, attrs={'bold'})
@@ -93,11 +131,9 @@ class Word2VecWeightCalculator(calculators.weight_calculator.WeightCalculator):
         article = Article.objects.get(id=articles_id[i])
         colour = 'green' if articles_id[i] in corrected_articles_id else 'red'
         sign = '*' if articles_id[i] in corrected_articles_id else ' '
-        logging.debug(self.__colored(' %sposition: %5d, distance: %f, article: %s' % (sign, position+1, distance, article), colour))
+        logging.warning(self.__colored(' %sposition: %5d, distance: %f, article: %s' % (sign, position+1, distance, article), colour))
 
-    def __upload_positions(self, question_id, articles_id, distances, method):
-        question = Question.objects.get(id=question_id)
-        logging.debug(self.__colored('uploading positions, question: %s' % (question), 'yellow'))
+    def __upload_positions(self, question, articles_id, distances, method):
         scores = np.argsort(np.argsort(distances))
         corrected_articles_id = list(question.answer_set.all().values_list('article_id', flat=True))
         for position in range(0, self.debug_top_items):
@@ -109,12 +145,15 @@ class Word2VecWeightCalculator(calculators.weight_calculator.WeightCalculator):
             if (position >= self.debug_top_items):
                 self.__print(corrected_articles_id, position, articles_id, scores, distances)
             Solution.objects.create(position=position+1, answer=answer, method=method)
-        logging.debug('')
+        logging.info('')
 
     def calculate(self, questions, method_name, is_title):
-        articles = Article.objects.all()
-        (questions_id, questions_vectors, articles_id, articles_vectors) = self.__prepare_vectros(questions, articles, is_title)
-        method, created = Method.objects.get_or_create(name=('%s, type: word2vec' % method_name))
-        for i in range(0, len(questions_id)):
-            distances = self.__calculate_distances(questions_vectors[i], articles_vectors)
-            self.__upload_positions(questions_id[i], articles_id, distances, method)
+        Method.objects.filter(name__contains='type: xxx').delete()
+        method, created = Method.objects.get_or_create(name=('%s, type: xxx' % method_name))
+
+        for question in [questions[2]]:
+            logging.info('calculating')
+            logging.warning(self.__colored('question: %s' % (question), 'yellow'))
+            (question_data, articles_id, articles_data) = self.__prepare_data(question, is_title, 10)
+            distances = self.__calculate_distances(question_data, articles_data)
+            self.__upload_positions(question, articles_id, distances, method)
