@@ -81,7 +81,8 @@ def resolve_questions_word2vec(questions_queue, method_name, is_title, debug_top
     while True:
         try:
             question = questions_queue.get(timeout=1)
-            word2vec_calculator.calculate(question, method_name, is_title, topn)
+            if not word2vec_calculator.has_already_solutions(question, method_name):
+                word2vec_calculator.calculate(question, method_name, is_title, topn)
         except queue.Empty:
             break
 

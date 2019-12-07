@@ -119,7 +119,7 @@ class Word2VecWeightCalculator():
         article = Article.objects.get(id=articles_id[i])
         colour = 'green' if articles_id[i] in corrected_articles_id else 'red'
         sign = '*' if articles_id[i] in corrected_articles_id else ' '
-        logging.warning(self.__colored(' %sposition: %5d, distance: %f, article: %s' % (sign, position+1, distance, article), colour))
+        logging.warning(self.__colored(' %sposition: %6d, distance: %5.4f, article: %s' % (sign, position+1, distance, article), colour))
 
     def __upload_positions(self, question, articles_id, distances, method):
         scores = np.argsort(np.argsort(distances))
@@ -128,12 +128,25 @@ class Word2VecWeightCalculator():
             self.__print(corrected_articles_id, position, articles_id, scores, distances)
 
         for answer in question.answer_set.all():
-            i = articles_id.index(answer.article_id)
-            position = scores[i]
-            if (position >= self.__debug_top_items):
-                self.__print(corrected_articles_id, position, articles_id, scores, distances)
-            Solution.objects.create(position=position+1, answer=answer, method=method)
+            try:
+                i = articles_id.index(answer.article_id)
+                position = scores[i]
+                if (position >= self.__debug_top_items):
+                    self.__print(corrected_articles_id, position, articles_id, scores, distances)
+                Solution.objects.create(position=position+1, answer=answer, method=method)
+            except:
+                position = 10**9
+                logging.warning(self.__colored(' %sposition: %6d, distance: %5.4f, article: %s' % ('*', position, 99.99, answer.article), 'green'))
+                Solution.objects.create(position=position, answer=answer, method=method)
         logging.info('')
+
+    def has_already_solutions(self, question, method_name):
+        try:
+            answers = Answer.objects.filter(question=question).values_list('id', flat=True)
+            method = Method.objects.get(name=method_name)
+            return Solution.objects.filter(method=method, answer_id__in=answers).count() == len(answers)
+        except Exception as e:
+            return False
 
     def calculate(self, question, method_name, is_title, topn):
         logging.info('calculating')
