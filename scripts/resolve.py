@@ -67,14 +67,19 @@ def start_tfidf(questions, num_threads, method_name, is_title, ngram, debug_top_
     for question in questions:
         questions_queue.put(question)
 
-    threads = []
-    for i in range(num_threads):
-        thread = multiprocessing.Process(target=resolve_questions_tf_idf, args=(questions_queue, method_name, is_title, ngram, debug_top_items, tfidf_models, vector_models, neighbors, minimal_word_idf_weights, power_factors))
-        thread.start()
-        threads.append(thread)
+    try:
+        threads = []
+        for i in range(num_threads):
+            thread = multiprocessing.Process(target=resolve_questions_tf_idf, args=(questions_queue, method_name, is_title, ngram, debug_top_items, tfidf_models, vector_models, neighbors, minimal_word_idf_weights, power_factors))
+            thread.start()
+            threads.append(thread)
 
-    for thread in threads:
-        thread.join()
+        for thread in threads:
+            thread.join()
+    except KeyboardInterrupt:
+        logging.info('stopping threads')
+        for thread in threads:
+            thread.terminate()
 
 def resolve_questions_word2vec(questions_queue, method_name, is_title, debug_top_items, topn, word2vec_model):
     word2vec_calculator = calculators.word2vec_weight_calculator.Word2VecWeightCalculator(debug_top_items, word2vec_model)
@@ -98,13 +103,18 @@ def start_word2vec(questions, num_threads, method_name, is_title, debug_top_item
         questions_queue.put(question)
 
     threads = []
-    for i in range(num_threads):
-        thread = multiprocessing.Process(target=resolve_questions_word2vec, args=(questions_queue, method_name, is_title, debug_top_items, topn, word2vec_model))
-        thread.start()
-        threads.append(thread)
+    try:
+        for i in range(num_threads):
+            thread = multiprocessing.Process(target=resolve_questions_word2vec, args=(questions_queue, method_name, is_title, debug_top_items, topn, word2vec_model))
+            thread.start()
+            threads.append(thread)
 
-    for thread in threads:
-        thread.join()
+        for thread in threads:
+            thread.join()
+    except KeyboardInterrupt:
+        logging.info('stopping threads')
+        for thread in threads:
+            thread.terminate()
 
 def start(questions, num_threads, method_name, is_title, ngram, debug_top_items, topn, tfidf_models, vector_models, word2vec_model, neighbors, minimal_word_idf_weights, power_factors):
     logging.info('start')
