@@ -75,7 +75,7 @@ def start_word2vec(questions, num_threads, method_name, is_title, debug_top_item
     logging.getLogger("gensim").setLevel(logging.WARNING)
     logging.getLogger("smart_open.smart_open_lib").setLevel(logging.WARNING)
     word2vec_calculator = calculators.word2vec_weight_calculator.Word2VecWeightCalculator(debug_top_items, word2vec_model)
-    word2vec_calculator.calculate(questions, Article.objects.all(), method_name, is_title)
+    word2vec_calculator.calculate(questions, method_name, is_title)
 
 def start(questions, num_threads, method_name, is_title, ngram, debug_top_items, tfidf_models, vector_models, word2vec_model, neighbors, minimal_word_idf_weights, power_factors):
     logging.info('start')

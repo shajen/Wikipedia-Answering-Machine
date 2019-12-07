@@ -1,6 +1,7 @@
 from collections import defaultdict
 from data.models import *
 from functools import reduce
+from termcolor import colored
 import calculators.weight_calculator
 import gensim.models
 import logging
@@ -54,53 +55,66 @@ class Word2VecWeightCalculator(calculators.weight_calculator.WeightCalculator):
     def __get_question_words(self, question_id):
         return list(QuestionOccurrence.objects.filter(question_id=question_id).values_list('word_id', flat=True))
 
-    def __calculate_distances(self, questions, articles, is_title):
-        logging.info('calculating distances')
+    def __prepare_vectros(self, questions, articles, is_title):
+        logging.info('preparing questions')
 
-        logging.info('calculating questions')
         questions_id = []
-        questions_vector = []
+        questions_vectors = []
         for question in questions:
             questions_id.append(question.id)
-            questions_vector.append(self.__words_id_to_vector(self.__get_question_words(question.id)))
+            questions_vectors.append(self.__words_id_to_vector(self.__get_question_words(question.id)))
+        questions_vectors = np.array(questions_vectors)
+        logging.info('questions size: %s' % str(questions_vectors.shape))
 
-        logging.info('calculating articles')
+        logging.info('preparing articles')
         articles_id = []
-        articles_vector = []
+        articles_vectors = []
         i = 0
         for article in articles:
             i += 1
             if i % 10000 == 0:
                 logging.info('iteration #%d' % i)
             articles_id.append(article.id)
-            articles_vector.append(self.__words_id_to_vector(self.__get_article_words(article.id, is_title)))
+            articles_vectors.append(self.__words_id_to_vector(self.__get_article_words(article.id, is_title)))
+        articles_vectors = np.array(articles_vectors)
+        logging.info('articles size: %s' % str(articles_vectors.shape))
 
-        articles_vector = np.array(articles_vector)
-        questions_vector = np.array(questions_vector)
-        logging.info('questions size: %s' % str(questions_vector.shape))
-        logging.info('articles size: %s' % str(articles_vector.shape))
-        return (questions_id, articles_id, scipy.spatial.distance.cdist(questions_vector, articles_vector, 'cosine'))
+        return (questions_id, questions_vectors, articles_id, articles_vectors)
 
-    def __upload_positions(self, questions_id, articles_id, distances, method_name):
-        logging.info('uploading positions')
-        logging.info('distances size: %s' % str(distances.shape))
+    def __calculate_distances(self, question_vector, articles_vectors):
+        return scipy.spatial.distance.cdist(np.array([question_vector]), articles_vectors, 'cosine')[0]
+
+    def __colored(self, text, colour):
+        return colored(text, colour, attrs={'bold'})
+
+    def __print(self, corrected_articles_id, position, articles_id, scores, distances):
+        i = np.where(scores == position)[0][0]
+        distance = distances[i]
+        article = Article.objects.get(id=articles_id[i])
+        colour = 'green' if articles_id[i] in corrected_articles_id else 'red'
+        sign = '*' if articles_id[i] in corrected_articles_id else ' '
+        logging.debug(self.__colored(' %sposition: %5d, distance: %f, article: %s' % (sign, position+1, distance, article), colour))
+
+    def __upload_positions(self, question_id, articles_id, distances, method):
+        question = Question.objects.get(id=question_id)
+        logging.debug(self.__colored('uploading positions, question: %s' % (question), 'yellow'))
+        scores = np.argsort(np.argsort(distances))
+        corrected_articles_id = list(question.answer_set.all().values_list('article_id', flat=True))
+        for position in range(0, self.debug_top_items):
+            self.__print(corrected_articles_id, position, articles_id, scores, distances)
+
+        for answer in question.answer_set.all():
+            i = articles_id.index(answer.article_id)
+            position = scores[i]
+            if (position >= self.debug_top_items):
+                self.__print(corrected_articles_id, position, articles_id, scores, distances)
+            Solution.objects.create(position=position+1, answer=answer, method=method)
+        logging.debug('')
+
+    def calculate(self, questions, method_name, is_title):
+        articles = Article.objects.all()
+        (questions_id, questions_vectors, articles_id, articles_vectors) = self.__prepare_vectros(questions, articles, is_title)
         method, created = Method.objects.get_or_create(name=('%s, type: word2vec' % method_name))
-        scores = np.argsort(distances, axis=1)
         for i in range(0, len(questions_id)):
-            question = Question.objects.get(id=questions_id[i])
-            logging.debug(question)
-            for answer in question.answer_set.all():
-                try:
-                    j = articles_id.index(answer.article_id)
-                    position = scores[i][j] + 1
-                    logging.debug('  article:  %s' % answer.article)
-                    logging.debug('  position: %d' % position)
-                    logging.debug('  distance: %.6f' % distances[i][j])
-                    Solution.objects.create(position=position, answer=answer, method=method)
-                except ValueError:
-                    pass
-            logging.debug('')
-
-    def calculate(self, questions, articles, method_name, is_title):
-        (questions_id, articles_id, distances) = self.__calculate_distances(questions, articles, is_title)
-        self.__upload_positions(questions_id, articles_id, distances, method_name)
+            distances = self.__calculate_distances(questions_vectors[i], articles_vectors)
+            self.__upload_positions(questions_id[i], articles_id, distances, method)
