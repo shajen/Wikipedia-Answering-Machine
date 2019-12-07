@@ -119,11 +119,12 @@ class Word2VecWeightCalculator():
         article = Article.objects.get(id=articles_id[i])
         colour = 'green' if articles_id[i] in corrected_articles_id else 'red'
         sign = '*' if articles_id[i] in corrected_articles_id else ' '
-        logging.warning(self.__colored(' %sposition: %6d, distance: %5.4f, article: %s' % (sign, position+1, distance, article), colour))
+        logging.warning(self.__colored(' %sposition: %6d, distance: %5.4f, article (%7d): %s' % (sign, position+1, distance, article.id, article), colour))
 
     def __upload_positions(self, question, articles_id, distances, method):
         scores = np.argsort(np.argsort(distances))
         corrected_articles_id = list(question.answer_set.all().values_list('article_id', flat=True))
+        logging.warning(self.__colored('question (%5d): %s' % (question.id, question), 'yellow'))
         for position in range(0, self.__debug_top_items):
             self.__print(corrected_articles_id, position, articles_id, scores, distances)
 
@@ -136,7 +137,7 @@ class Word2VecWeightCalculator():
                 Solution.objects.create(position=position+1, answer=answer, method=method)
             except:
                 position = 10**9
-                logging.warning(self.__colored(' %sposition: %6d, distance: %5.4f, article: %s' % ('*', position, 99.99, answer.article), 'green'))
+                logging.warning(self.__colored(' %sposition: %6d, distance: %5.4f, article (%7d): %s' % ('*', position, 99.99, answer.article.id, article), 'green'))
                 Solution.objects.create(position=position, answer=answer, method=method)
         logging.info('')
 
@@ -151,7 +152,6 @@ class Word2VecWeightCalculator():
     def calculate(self, question, method_name, is_title, topn):
         logging.info('calculating')
         method, created = Method.objects.get_or_create(name=method_name)
-        logging.warning(self.__colored('question: %s' % (question), 'yellow'))
         (question_data, articles_id, articles_data) = self.__prepare_data(question, is_title, topn)
         distances = self.__calculate_distances(question_data, articles_data)
         self.__upload_positions(question, articles_id, distances, method)
