@@ -137,7 +137,7 @@ class Word2VecWeightCalculator():
                 Solution.objects.create(position=position+1, answer=answer, method=method)
             except:
                 position = 10**9
-                logging.warning(self.__colored(' %sposition: %6d, distance: %5.4f, article (%7d): %s' % ('*', position, 99.99, answer.article.id, article), 'green'))
+                logging.warning(self.__colored(' %sposition: %6d, distance: %5.4f, article (%7d): %s' % ('*', position, 99.99, answer.article.id, answer.article), 'green'))
                 Solution.objects.create(position=position, answer=answer, method=method)
         logging.info('')
 
