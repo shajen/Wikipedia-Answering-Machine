@@ -96,7 +96,7 @@ def start_word2vec(questions, num_threads, method_name, is_title, debug_top_item
     logging.getLogger("gensim").setLevel(logging.WARNING)
     logging.getLogger("smart_open.smart_open_lib").setLevel(logging.WARNING)
     logging.info('topn: %s' % topn)
-    method_name = '%s, topn: %d, type: word2vec' % (method_name, topn)
+    method_name = '%s, topn: %03d, type: word2vec' % (method_name, topn)
     logging.info('method_name: %s' % method_name)
     questions_queue = multiprocessing.Queue()
     for question in questions:
