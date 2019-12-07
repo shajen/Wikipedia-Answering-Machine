@@ -125,7 +125,7 @@ class Word2VecWeightCalculator():
         scores = np.argsort(np.argsort(distances))
         corrected_articles_id = list(question.answer_set.all().values_list('article_id', flat=True))
         logging.warning(self.__colored('question (%5d): %s' % (question.id, question), 'yellow'))
-        for position in range(0, self.__debug_top_items):
+        for position in range(0, min(len(distances), self.__debug_top_items)):
             self.__print(corrected_articles_id, position, articles_id, scores, distances)
 
         for answer in question.answer_set.all():
