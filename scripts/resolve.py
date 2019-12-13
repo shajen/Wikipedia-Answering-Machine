@@ -10,17 +10,19 @@ import re
 import shlex
 import subprocess
 import sys
+import random
 sys.path.append(os.path.dirname(__file__))
 
 import calculators.categories_weight_calculator
 import calculators.links_weight_calculator
+import calculators.neural_weight_calculator
 import calculators.tf_idf_weight_calculator
 import calculators.weight_comparator
 import calculators.word2vec_weight_calculator
 import tools.logger
 
-def resolve_questions_tf_idf(questions_queue, method, is_title, ngram, debug_top_items, tfidf_models, vector_models, neighbors, minimal_word_idf_weights, power_factors):
-    tf_idf_calculator = calculators.tf_idf_weight_calculator.TfIdfWeightCalculator(debug_top_items, ngram)
+def resolve_questions_tf_idf(args, questions_queue, method_name, neighbors, minimal_word_idf_weights, power_factors):
+    tf_idf_calculator = calculators.tf_idf_weight_calculator.TfIdfWeightCalculator(args.debug_top_items, args.ngram)
     # links_wc = calculators.links_weight_calculator.LinksWeightCalculator(debug_top_items)
     # categories_wc = calculators.categories_weight_calculator.CategoriesWeightCalculator(debug_top_items)
 
@@ -48,7 +50,7 @@ def resolve_questions_tf_idf(questions_queue, method, is_title, ngram, debug_top
                     comparators = list(filter(lambda comparator: not comparator.has_already_solutions(question), comparators))
                     if comparators:
                         if not prepared:
-                            tf_idf_calculator.prepare(question, is_title)
+                            tf_idf_calculator.prepare(question, args.is_title)
                             prepared = True
                         tf_idf_calculator.calculate(question, neighbor, minimal_word_idf_weight, comparators)
                 # links_wc.upload_positions(q, method, articles_weight)
@@ -56,12 +58,12 @@ def resolve_questions_tf_idf(questions_queue, method, is_title, ngram, debug_top
         except queue.Empty:
             break
 
-def start_tfidf(questions, num_threads, method_name, is_title, ngram, debug_top_items, tfidf_models, vector_models, neighbors, minimal_word_idf_weights, power_factors):
+def start_tfidf(args, questions, method_name, neighbors, minimal_word_idf_weights, power_factors):
     db.connections.close_all()
     logging.info('neighbors: %s' % neighbors)
     logging.info('minimal_word_idf_weights: %s' % minimal_word_idf_weights)
     logging.info('power_factors: %s' % power_factors)
-    method_name = '%s, ngram: %d' % (method_name, ngram)
+    method_name = '%s, ngram: %d' % (method_name, args.ngram)
     logging.info('method_name: %s' % method_name)
     questions_queue = multiprocessing.Queue()
     for question in questions:
@@ -69,8 +71,8 @@ def start_tfidf(questions, num_threads, method_name, is_title, ngram, debug_top_
 
     try:
         threads = []
-        for i in range(num_threads):
-            thread = multiprocessing.Process(target=resolve_questions_tf_idf, args=(questions_queue, method_name, is_title, ngram, debug_top_items, tfidf_models, vector_models, neighbors, minimal_word_idf_weights, power_factors))
+        for i in range(args.threads):
+            thread = multiprocessing.Process(target=resolve_questions_tf_idf, args=(args, questions_queue, method_name, neighbors, minimal_word_idf_weights, power_factors))
             thread.start()
             threads.append(thread)
 
@@ -81,22 +83,22 @@ def start_tfidf(questions, num_threads, method_name, is_title, ngram, debug_top_
         for thread in threads:
             thread.terminate()
 
-def resolve_questions_word2vec(questions_queue, method_name, is_title, debug_top_items, topn, word2vec_model):
-    word2vec_calculator = calculators.word2vec_weight_calculator.Word2VecWeightCalculator(debug_top_items, word2vec_model)
+def resolve_questions_word2vec(args, questions_queue, method_name):
+    word2vec_calculator = calculators.word2vec_weight_calculator.Word2VecWeightCalculator(args.debug_top_items, args.word2vec_file)
     while True:
         try:
             question = questions_queue.get(timeout=1)
             if not word2vec_calculator.has_already_solutions(question, method_name):
-                word2vec_calculator.calculate(question, method_name, is_title, topn)
+                word2vec_calculator.calculate(question, method_name, args.is_title, args.topn)
         except queue.Empty:
             break
 
-def start_word2vec(questions, num_threads, method_name, is_title, debug_top_items, topn, word2vec_model):
+def start_word2vec(args, questions, method_name):
     db.connections.close_all()
     logging.getLogger("gensim").setLevel(logging.WARNING)
     logging.getLogger("smart_open.smart_open_lib").setLevel(logging.WARNING)
-    logging.info('topn: %s' % topn)
-    method_name = '%s, topn: %03d, type: word2vec' % (method_name, topn)
+    logging.info('topn: %s' % args.topn)
+    method_name = '%s, topn: %03d, type: word2vec' % (method_name, args.topn)
     logging.info('method_name: %s' % method_name)
     questions_queue = multiprocessing.Queue()
     for question in questions:
@@ -104,8 +106,8 @@ def start_word2vec(questions, num_threads, method_name, is_title, debug_top_item
 
     threads = []
     try:
-        for i in range(num_threads):
-            thread = multiprocessing.Process(target=resolve_questions_word2vec, args=(questions_queue, method_name, is_title, debug_top_items, topn, word2vec_model))
+        for i in range(args.threads):
+            thread = multiprocessing.Process(target=resolve_questions_word2vec, args=(args, questions_queue, method_name))
             thread.start()
             threads.append(thread)
 
@@ -116,14 +118,39 @@ def start_word2vec(questions, num_threads, method_name, is_title, debug_top_item
         for thread in threads:
             thread.terminate()
 
-def start(questions, num_threads, method_name, is_title, ngram, debug_top_items, topn, tfidf_models, vector_models, word2vec_model, neighbors, minimal_word_idf_weights, power_factors):
+def start_neural(args, questions, method_name):
+    logging.info("questions_words_count: %d" % args.neural_model_questions_words_count)
+    logging.info("articles_title_words_count: %d" % args.neural_model_articles_title_words_count)
+    logging.info("articles_words_count: %d" % args.neural_model_articles_words_count)
+    logging.info("good_bad_ratio: %d" % args.neural_model_good_bad_ratio)
+    logging.info("train_data_percentage: %.2f" % args.neural_model_train_data_percentage)
+
+    random.shuffle(questions)
+    split = int(len(questions) * args.neural_model_train_data_percentage)
+    train_questions = questions[:split]
+    test_questions = questions[split:]
+    logging.info("train questions: %d" % len(train_questions))
+    logging.info("test questions: %d" % len(test_questions))
+
+    neural_calculator = calculators.neural_weight_calculator.NeuralWeightCalculator(args.debug_top_items, args.word2vec_file)
+    neural_calculator.prepareData(
+        train_questions,
+        args.neural_model_questions_words_count,
+        args.neural_model_articles_title_words_count,
+        args.neural_model_articles_words_count,
+        args.neural_model_good_bad_ratio)
+
+def start(args, questions, method_name, neighbors, minimal_word_idf_weights, power_factors):
     logging.info('start')
-    logging.info('threads: %d' % num_threads)
-    logging.info('debug_top_items: %d' % debug_top_items)
-    if tfidf_models or vector_models:
-        start_tfidf(questions, num_threads, method_name, is_title, ngram, debug_top_items, tfidf_models, vector_models, neighbors, minimal_word_idf_weights, power_factors)
-    if word2vec_model:
-        start_word2vec(questions, num_threads, method_name, is_title, debug_top_items, topn, word2vec_model)
+    logging.info('questions: %d' % len(questions))
+    logging.info('threads: %d' % args.threads)
+    logging.info('debug_top_items: %d' % args.debug_top_items)
+    if args.tfidf_models or args.vector_models:
+        start_tfidf(args, questions, method_name, neighbors, minimal_word_idf_weights, power_factors)
+    if args.word2vec_model:
+        start_word2vec(args, questions, method_name)
+    if args.neural_model:
+        start_neural(args, questions, method_name)
     logging.info('finish')
 
 def run(*args):
@@ -138,7 +165,14 @@ def run(*args):
     parser.add_argument('-n', '--ngram', help="use ngram mode", type=int, default=1, metavar="ngram")
     parser.add_argument("-tm", "--tfidf_models", help="use td-idf models", action='store_true')
     parser.add_argument("-vm", "--vector_models", help="use vector models", action='store_true')
-    parser.add_argument("-w2vm", "--word2vec_model", help="use word2vec model", type=str, default='', metavar="file")
+    parser.add_argument("-w2vm", "--word2vec_model", help="use word2vec model", action='store_true')
+    parser.add_argument("-nm", "--neural_model", help="use neural model", action='store_true')
+    parser.add_argument("-nm_qwc", "--neural_model_questions_words_count", help="use first n words from questions", type=int, default=20)
+    parser.add_argument("-nm_atwc", "--neural_model_articles_title_words_count", help="use first n words from articles title", type=int, default=20)
+    parser.add_argument("-nm_awc", "--neural_model_articles_words_count", help="use first n words from articles", type=int, default=100)
+    parser.add_argument("-nm_gbr", "--neural_model_good_bad_ratio", help="ratio between good and bad articles", type=int, default=3)
+    parser.add_argument("-nm_tdp", "--neural_model_train_data_percentage", help="percentage of train data", type=float, default=0.8)
+    parser.add_argument("-w2vf", "--word2vec_file", help="path to word2vec model", type=str, default='', metavar="file")
     parser.add_argument('-m', '--method', help="method name to make unique in database", type=str, default='', metavar="method")
     parser.add_argument("-dti", "--debug_top_items", help="print top n items in debug", type=int, default=3, metavar="int")
     parser.add_argument("-tn", "--topn", help="use n nearest words in word2vec model", type=int, default=10, metavar="n")
@@ -160,4 +194,4 @@ def run(*args):
     neighbors = list(map(lambda x: int(x), args.neighbors.split(',')))
     minimal_word_idf_weights = list(map(lambda x: float(x), args.minimal_word_idf_weights.split(',')))
     power_factors = list(map(lambda x: int(x), args.power_factors.split(',')))
-    start(questions, args.threads, method_name, args.title, args.ngram, args.debug_top_items, args.topn, args.tfidf_models, args.vector_models, args.word2vec_model, neighbors, minimal_word_idf_weights, power_factors)
+    start(args, questions, method_name, neighbors, minimal_word_idf_weights, power_factors)
