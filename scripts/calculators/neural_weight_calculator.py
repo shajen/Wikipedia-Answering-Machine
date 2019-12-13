@@ -47,6 +47,8 @@ class NeuralWeightCalculator():
     def __prepareArticle(self, articles_id, words, is_title):
         logging.debug('preparing %d articles, top words: %d, title: %d' %(len(articles_id), words, is_title))
         articles_words = defaultdict(lambda : [None] * words)
+        total = ArticleOccurrence.objects.filter(article_id__in=articles_id, is_title=is_title).count()
+        logging.debug("total records: %d" % total)
         for (article_id, word_id, positions) in ArticleOccurrence.objects.filter(article_id__in=articles_id, is_title=is_title).values_list('article_id', 'word_id', 'positions'):
             for position in positions.split(','):
                 position = int(position)
@@ -63,6 +65,8 @@ class NeuralWeightCalculator():
     def __prepareQuestion(self, questions_id, words):
         logging.debug('preparing %d questions, top words: %d' %(len(questions_id), words))
         questions_words = defaultdict(lambda : [None] * words)
+        total = QuestionOccurrence.objects.filter(question_id__in=questions_id).count()
+        logging.debug("total records: %d" % total)
         for (question_id, word_id, positions) in QuestionOccurrence.objects.filter(question_id__in=questions_id).values_list('question_id', 'word_id', 'positions'):
             for position in positions.split(','):
                 position = int(position)
@@ -73,7 +77,7 @@ class NeuralWeightCalculator():
         for question_id in questions_id:
             data.append(self.__words2vec(questions_words[question_id]))
         data = np.array(data)
-        logging.debug("%s" % str(data.shape))
+        logging.debug("data size: %s" % str(data.shape))
         return data
 
     def __save_file(self, name, data):
