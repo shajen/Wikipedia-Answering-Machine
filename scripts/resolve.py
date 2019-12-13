@@ -125,20 +125,14 @@ def start_neural(args, questions, method_name):
     logging.info("good_bad_ratio: %d" % args.neural_model_good_bad_ratio)
     logging.info("train_data_percentage: %.2f" % args.neural_model_train_data_percentage)
 
-    random.shuffle(questions)
-    split = int(len(questions) * args.neural_model_train_data_percentage)
-    train_questions = questions[:split]
-    test_questions = questions[split:]
-    logging.info("train questions: %d" % len(train_questions))
-    logging.info("test questions: %d" % len(test_questions))
-
-    neural_calculator = calculators.neural_weight_calculator.NeuralWeightCalculator(args.debug_top_items, args.word2vec_file)
-    neural_calculator.prepareData(
-        train_questions,
-        args.neural_model_questions_words_count,
-        args.neural_model_articles_title_words_count,
-        args.neural_model_articles_words_count,
-        args.neural_model_good_bad_ratio)
+    neural_calculator = calculators.neural_weight_calculator.NeuralWeightCalculator(args.debug_top_items, args.word2vec_file, args.neural_model_work_directory, args.neural_model_skip_prepare_data)
+    if not args.neural_model_skip_prepare_data:
+        neural_calculator.prepareData(
+            questions,
+            args.neural_model_questions_words_count,
+            args.neural_model_articles_title_words_count,
+            args.neural_model_articles_words_count,
+            args.neural_model_good_bad_ratio)
 
 def start(args, questions, method_name, neighbors, minimal_word_idf_weights, power_factors):
     logging.info('start')
@@ -172,6 +166,8 @@ def run(*args):
     parser.add_argument("-nm_awc", "--neural_model_articles_words_count", help="use first n words from articles", type=int, default=100)
     parser.add_argument("-nm_gbr", "--neural_model_good_bad_ratio", help="ratio between good and bad articles", type=int, default=3)
     parser.add_argument("-nm_tdp", "--neural_model_train_data_percentage", help="percentage of train data", type=float, default=0.8)
+    parser.add_argument("-nm_wd", "--neural_model_work_directory", help="directory to save and read data during learing", type=str)
+    parser.add_argument("-nm_spd", "--neural_model_skip_prepare_data", help="use already prepared dataset instead of generating new one", action='store_true')
     parser.add_argument("-w2vf", "--word2vec_file", help="path to word2vec model", type=str, default='', metavar="file")
     parser.add_argument('-m', '--method', help="method name to make unique in database", type=str, default='', metavar="method")
     parser.add_argument("-dti", "--debug_top_items", help="print top n items in debug", type=int, default=3, metavar="int")

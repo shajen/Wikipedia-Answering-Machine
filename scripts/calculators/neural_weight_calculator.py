@@ -7,8 +7,13 @@ import numpy as np
 import tensorflow as tf
 
 class NeuralWeightCalculator():
-    def __init__(self, debug_top_items, model_file):
+    def __init__(self, debug_top_items, model_file, workdir, skip_prepare_data):
         self.__debug_top_items = debug_top_items
+        self.__workdir = workdir
+
+        if skip_prepare_data:
+            logging.info('skipping reading data')
+            return
 
         logging.info('reading base forms')
         stop_words_id = list(Word.objects.filter(is_stop_word=True).values_list('id', flat=True))
@@ -71,12 +76,13 @@ class NeuralWeightCalculator():
         logging.debug("%s" % str(data.shape))
         return data
 
+    def __save_file(self, name, data):
+        filename = '%s/%s.npy' % (self.__workdir, name)
+        logging.debug("saving array %s to file: %s" % (str(data.shape), filename))
+        np.save(filename, data)
+
     def prepareData(self, questions, questionWords, articleTitleWords, articleWords, goodBadArticlesRatio):
         logging.info('start preparing data')
-        questionsData = []
-        articlesTitleData = []
-        articlesData = []
-        articlesTarget = []
 
         questions_id = list(map(lambda q: [q.id] * q.answer_set.count(), questions))
         questions_id = list(reduce(lambda x, y: x + y, questions_id, []))
@@ -89,8 +95,20 @@ class NeuralWeightCalculator():
         bad_articles_id = list(Article.objects.exclude(id__in=good_articles_id).order_by('?').values_list('id', flat=True)[:goodBadArticlesRatio * len(good_articles_id)])
         logging.debug('bad articles: %d' % len(bad_articles_id))
 
-        questions_data = self.__prepareQuestion(questions_id, questionWords)
+        good_questions_data = self.__prepareQuestion(questions_id, questionWords)
         good_articles_title_data = self.__prepareArticle(good_articles_id, articleTitleWords, True)
         good_articles_data = self.__prepareArticle(good_articles_id, articleWords, False)
+        good_target = np.array([1.0] * good_articles_data.shape[0])
+        bad_questions_data = np.random.permutation(np.repeat(good_questions_data, goodBadArticlesRatio, axis=0))
         bad_articles_title_data = self.__prepareArticle(bad_articles_id, articleTitleWords, True)
         bad_articles_data = self.__prepareArticle(bad_articles_id, articleWords, False)
+        bad_target = np.array([0.0] * bad_articles_data.shape[0])
+
+        self.__save_file('good_questions_data', good_questions_data)
+        self.__save_file('good_articles_title_data', good_articles_title_data)
+        self.__save_file('good_articles_data', good_articles_data)
+        self.__save_file('good_target', good_target)
+        self.__save_file('bad_questions_data', bad_questions_data)
+        self.__save_file('bad_articles_title_data', bad_articles_title_data)
+        self.__save_file('bad_articles_data', bad_articles_data)
+        self.__save_file('bad_target', bad_target)
