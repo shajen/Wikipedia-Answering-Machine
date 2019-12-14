@@ -1,6 +1,7 @@
 from collections import defaultdict
 from data.models import *
 from functools import reduce
+from termcolor import colored
 import gensim.models
 import logging
 import numpy as np
@@ -33,6 +34,9 @@ class NeuralWeightCalculator():
             except KeyError:
                 pass
         logging.info('words vec size: %d' % (len(self.__word_id_to_vector)))
+
+    def __colored(self, text, colour):
+        return colored(text, colour, attrs={'bold'})
 
     def __word2vec(self, word):
         if word in self.__changed_word_id_to_base_form_id:
@@ -147,13 +151,25 @@ class NeuralWeightCalculator():
         return ((questions[:split_index], articles_title[:split_index], articles_content[:split_index], target[:split_index]),
                 (questions[split_index:], articles_title[split_index:], articles_content[split_index:], target[split_index:]))
 
-    def __test_model(self, model, questions, articles_title, articles_content, target):
+    def __simple_test_model(self, model, dataset_name, questions, articles_title, articles_content, target):
         test_scores = model.evaluate(
             { 'questions': questions, 'articles_title': articles_title, 'articles_content': articles_content },
             { 'weight': target },
             verbose = 0)
-        logging.info('test dataset loss: %.4f' % test_scores[0])
-        logging.info('test dataset accuracy: %.4f' % test_scores[1])
+        logging.info('simple test, dataset: %s, loss: %.4f, accuracy: %.4f' % (dataset_name, test_scores[0], test_scores[1]))
+
+    def __semi_test_model(self, model, dataset_name, questions, articles_title, articles_content, target):
+        predictet_target = model.predict(
+            { 'questions': questions, 'articles_title': articles_title, 'articles_content': articles_content },
+            batch_size=64,
+            verbose=0)
+        predictet_target = predictet_target.reshape(-1)
+        predictet_target = np.where(predictet_target > 0.5, 1.0, 0.0)
+        corrected_count = np.count_nonzero(predictet_target == target)
+        total_count = target.shape[0]
+        r1 = self.__colored('%d/%d' % (corrected_count, total_count), 'yellow')
+        r2 = self.__colored('%.2f %%' % (corrected_count / total_count * 100), 'yellow')
+        logging.info("semi test, dataset: %s, corrected: %s (%s)" % (dataset_name, r1, r2))
 
     def __create_model(self, questions_size, articles_title_size, articles_content_size):
         filters = 20
@@ -193,6 +209,9 @@ class NeuralWeightCalculator():
         (train_data, test_data) = self.__prepare_dataset(train_data_percentage)
         (train_questions, train_articles_title, train_articles_content, train_target) = train_data
         (test_questions, test_articles_title, test_articles_content, test_target) = test_data
+        logging.info("train samples: %d" %train_questions.shape[0])
+        logging.info("test samples: %d" %test_questions.shape[0])
+
         logging.debug("train dataset:")
         logging.debug("questions: %s" % str(train_questions.shape))
         logging.debug("articles_title: %s" % str(train_articles_title.shape))
@@ -208,13 +227,25 @@ class NeuralWeightCalculator():
         if use_last_trained:
             logging.info('use last trained model')
             model = tf.keras.models.load_model('%s/model.h5' % self.__workdir)
-            self.__test_model(model, test_questions, test_articles_title, test_articles_content, test_target)
+            self.__simple_test_model(model, 'test', test_questions, test_articles_title, test_articles_content, test_target)
+            self.__semi_test_model(model, 'test', test_questions, test_articles_title, test_articles_content, test_target)
+
         else:
             logging.info('create model')
             model = self.__create_model(train_questions.shape[1], train_articles_title.shape[1], train_articles_content.shape[1])
         logging.info('trainable weights: %s' % model.count_params())
 
-        save_callback = tf.keras.callbacks.ModelCheckpoint(filepath='%s/model.h5' % self.__workdir, save_best_only=True, verbose=0)
+        def on_epoch_end(current_epoch, data):
+            try:
+                logging.info("after epoch %d/%d, loss: %.6f, accuracy: %.6f, val_loss: %.6f, val_accuracy: %.6f" % (current_epoch, epoch, data['loss'], data['accuracy'], data['val_loss'], data['val_accuracy']))
+                # self.__simple_test_model(model, 'test', test_questions, test_articles_title, test_articles_content, test_target)
+                self.__semi_test_model(model, 'test', test_questions, test_articles_title, test_articles_content, test_target)
+            except:
+                pass
+
+        save_callback = tf.keras.callbacks.ModelCheckpoint(filepath='%s/model.h5' % self.__workdir, save_best_only=True, monitor='val_accuracy', verbose=0)
+        test_callback = tf.keras.callbacks.LambdaCallback(on_epoch_end=on_epoch_end)
+
         model.compile(
             optimizer = tf.keras.optimizers.RMSprop(1e-3),
             loss = tf.keras.losses.binary_crossentropy,
@@ -227,10 +258,9 @@ class NeuralWeightCalculator():
                 batch_size = 64,
                 epochs = epoch,
                 validation_split = 0.2,
-                verbose = 1,
-                callbacks=[save_callback])
+                verbose = 0,
+                callbacks=[save_callback, test_callback])
+            self.__simple_test_model(model, 'test', test_questions, test_articles_title, test_articles_content, test_target)
+            self.__semi_test_model(model, 'test', test_questions, test_articles_title, test_articles_content, test_target)
         except KeyboardInterrupt:
-            print('\n', file=sys.stderr)
             logging.info('learing stoppped by user')
-
-        self.__test_model(model, test_questions, test_articles_title, test_articles_content, test_target)

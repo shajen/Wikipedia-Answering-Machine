@@ -122,6 +122,7 @@ def start_neural(args, questions, method_name):
     logging.info("articles_words_count: %d" % args.neural_model_articles_words_count)
     logging.info("good_bad_ratio: %d" % args.neural_model_good_bad_ratio)
     logging.info("train_data_percentage: %.2f" % args.neural_model_train_data_percentage)
+    logging.info("epoch: %d" % args.neural_model_epoch)
 
     neural_calculator = calculators.neural_weight_calculator.NeuralWeightCalculator(args.debug_top_items, args.word2vec_file, args.neural_model_work_directory, args.neural_model_skip_prepare_data)
     if not args.neural_model_skip_prepare_data:
