@@ -134,6 +134,7 @@ def start_neural(args, questions, method_name):
             args.neural_model_good_bad_ratio)
     if not args.neural_model_skip_training:
         neural_calculator.train(args.neural_model_last_trained, args.neural_model_epoch, args.neural_model_train_data_percentage)
+    neural_calculator.test(args.neural_model_train_data_percentage)
 
 def start(args, questions, method_name, neighbors, minimal_word_idf_weights, power_factors):
     logging.info('start')

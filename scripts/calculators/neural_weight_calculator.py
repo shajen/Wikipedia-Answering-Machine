@@ -5,6 +5,7 @@ from termcolor import colored
 import gensim.models
 import logging
 import numpy as np
+import os
 import sys
 import tensorflow as tf
 
@@ -49,42 +50,51 @@ class NeuralWeightCalculator():
     def __words2vec(self, words):
         return list(map(lambda word: self.__word2vec(word), words))
 
-    def __prepareArticle(self, articles_id, words, name, is_title):
-        logging.debug('preparing %d articles, top words: %d, title: %d' %(len(articles_id), words, is_title))
-        data = []
-        total = len(articles_id)
-        current = 0
-        step = round(total / (10 if is_title else 100))
-        for article_id in articles_id:
-            current += 1
-            if current % step == 0:
-                logging.debug("progress: %d/%d (%.2f %%)" % (current, total, current / total * 100))
-            article_words = [None] * words
-            for (word_id, positions) in ArticleOccurrence.objects.filter(article_id=article_id, is_title=is_title).values_list('word_id', 'positions').iterator():
-                for position in positions.split(','):
+    def __prepareArticle(self, article_id, words, is_title):
+        article_words = [None] * words
+        for (word_id, positions) in ArticleOccurrence.objects.filter(article_id=article_id, is_title=is_title).values_list('word_id', 'positions').iterator():
+            for position in positions.split(','):
+                try:
                     position = int(position)
                     if (position <= words):
                         article_words[position - 1] = word_id
-            data.append(self.__words2vec(article_words))
+                except:
+                    pass
+        return self.__words2vec(article_words)
+
+    def __prepareArticles(self, articles_id, words, name, is_title, show_progress):
+        logging.debug('preparing %d articles, top words: %d, title: %d' %(len(articles_id), words, is_title))
+        data = []
+        total = len(articles_id)
+        current = 1
+        step = round(total / (10 if is_title else 100))
+        for article_id in articles_id:
+            data.append(self.__prepareArticle(article_id, words, is_title))
+            current += 1
+            if current % step == 0 and show_progress:
+                logging.debug("progress: %d/%d (%.2f %%)" % (current, total, current / total * 100))
         self.__save_file(name, np.array(data))
 
-    def __prepareQuestion(self, questions_id, words):
+    def __prepareQuestion(self, question_id, words):
+        question_words = [None] * words
+        for (word_id, positions) in QuestionOccurrence.objects.filter(question_id=question_id).values_list('word_id', 'positions').iterator():
+            for position in positions.split(','):
+                position = int(position)
+                if (position <= words):
+                    question_words[position - 1] = word_id
+        return self.__words2vec(question_words)
+
+    def __prepareQuestions(self, questions_id, words):
         logging.debug('preparing %d questions, top words: %d' %(len(questions_id), words))
         data = []
         total = len(questions_id)
-        current = 0
+        current = 1
         step = round(total / 10)
         for question_id in questions_id:
+            data.append(self.__prepareQuestion(question_id, words))
             current += 1
             if (current % step == 0):
                 logging.debug("progress: %d/%d (%.2f %%)" % (current, total, current / total * 100))
-            question_words = [None] * words
-            for (word_id, positions) in QuestionOccurrence.objects.filter(question_id=question_id).values_list('word_id', 'positions').iterator():
-                for position in positions.split(','):
-                    position = int(position)
-                    if (position <= words):
-                        question_words[position - 1] = word_id
-            data.append(self.__words2vec(question_words))
 
         data = np.array(data)
         logging.debug("data size: %s" % str(data.shape))
@@ -116,11 +126,11 @@ class NeuralWeightCalculator():
         bad_articles_id = list(Article.objects.exclude(id__in=good_articles_id).order_by('?').values_list('id', flat=True)[:goodBadArticlesRatio * len(good_articles_id)])
         logging.debug('bad articles: %d' % len(bad_articles_id))
 
-        self.__prepareArticle(good_articles_id, articleTitleWords, 'good_articles_title_data', True)
-        self.__prepareArticle(good_articles_id, articleContentWords, 'good_articles_content_data', False)
-        self.__prepareArticle(bad_articles_id, articleTitleWords, 'bad_articles_title_data', True)
-        self.__prepareArticle(bad_articles_id, articleContentWords, 'bad_articles_content_data', False)
-        good_questions_data = self.__prepareQuestion(questions_id, questionWords)
+        self.__prepareArticles(good_articles_id, articleTitleWords, 'good_articles_title_data', True, True)
+        self.__prepareArticles(good_articles_id, articleContentWords, 'good_articles_content_data', False, True)
+        self.__prepareArticles(bad_articles_id, articleTitleWords, 'bad_articles_title_data', True, True)
+        self.__prepareArticles(bad_articles_id, articleContentWords, 'bad_articles_content_data', False, True)
+        good_questions_data = self.__prepareQuestions(questions_id, questionWords)
         good_target = np.array([1.0] * good_questions_data.shape[0])
         bad_questions_data = np.random.permutation(np.repeat(good_questions_data, goodBadArticlesRatio, axis=0))
         bad_target = np.array([0.0] * bad_questions_data.shape[0])
@@ -131,6 +141,7 @@ class NeuralWeightCalculator():
         self.__save_file('bad_target', bad_target)
 
     def __prepare_dataset(self, train_data_percentage):
+        logging.info('preparing dataset')
         good_questions_data = self.__load_file('good_questions_data')
         good_articles_title_data = self.__load_file('good_articles_title_data')
         good_articles_content_data = self.__load_file('good_articles_content_data')
@@ -148,8 +159,33 @@ class NeuralWeightCalculator():
         target = np.concatenate((good_target, bad_target))[order]
 
         split_index = int(questions.shape[0] * train_data_percentage)
-        return ((questions[:split_index], articles_title[:split_index], articles_content[:split_index], target[:split_index]),
-                (questions[split_index:], articles_title[split_index:], articles_content[split_index:], target[split_index:]))
+        train_questions = questions[:split_index]
+        train_articles_title = articles_title[:split_index]
+        train_articles_content = articles_content[:split_index]
+        train_target = target[:split_index]
+
+        test_questions = questions[split_index:]
+        test_articles_title = articles_title[split_index:]
+        test_articles_content = articles_content[split_index:]
+        test_target = target[split_index:]
+
+        logging.info("train samples: %d" %train_questions.shape[0])
+        logging.info("test samples: %d" %test_questions.shape[0])
+
+        logging.debug("train dataset:")
+        logging.debug("questions: %s" % str(train_questions.shape))
+        logging.debug("articles_title: %s" % str(train_articles_title.shape))
+        logging.debug("articles_content: %s" % str(train_articles_content.shape))
+        logging.debug("target: %s" % str(train_target.shape))
+
+        logging.debug("train dataset:")
+        logging.debug("questions: %s" % str(test_questions.shape))
+        logging.debug("articles_title: %s" % str(test_articles_title.shape))
+        logging.debug("articles_content: %s" % str(test_articles_content.shape))
+        logging.debug("target: %s" % str(test_target.shape))
+
+        return ((train_questions, train_articles_title, train_articles_content, train_target),
+                (test_questions, test_articles_title, test_articles_content, test_target))
 
     def __simple_test_model(self, model, dataset_name, questions, articles_title, articles_content, target):
         test_scores = model.evaluate(
@@ -209,20 +245,6 @@ class NeuralWeightCalculator():
         (train_data, test_data) = self.__prepare_dataset(train_data_percentage)
         (train_questions, train_articles_title, train_articles_content, train_target) = train_data
         (test_questions, test_articles_title, test_articles_content, test_target) = test_data
-        logging.info("train samples: %d" %train_questions.shape[0])
-        logging.info("test samples: %d" %test_questions.shape[0])
-
-        logging.debug("train dataset:")
-        logging.debug("questions: %s" % str(train_questions.shape))
-        logging.debug("articles_title: %s" % str(train_articles_title.shape))
-        logging.debug("articles_content: %s" % str(train_articles_content.shape))
-        logging.debug("target: %s" % str(train_target.shape))
-
-        logging.debug("train dataset:")
-        logging.debug("questions: %s" % str(test_questions.shape))
-        logging.debug("articles_title: %s" % str(test_articles_title.shape))
-        logging.debug("articles_content: %s" % str(test_articles_content.shape))
-        logging.debug("target: %s" % str(test_target.shape))
 
         if use_last_trained:
             logging.info('use last trained model')
@@ -264,3 +286,38 @@ class NeuralWeightCalculator():
             self.__semi_test_model(model, 'test', test_questions, test_articles_title, test_articles_content, test_target)
         except KeyboardInterrupt:
             logging.info('learing stoppped by user')
+
+    def test(self, train_data_percentage):
+        logging.info('testing model')
+        (train_data, test_data) = self.__prepare_dataset(train_data_percentage)
+        (test_questions, test_articles_title, test_articles_content, test_target) = test_data
+
+        logging.info('use last trained model')
+        model = tf.keras.models.load_model('%s/model.h5' % self.__workdir)
+        self.__simple_test_model(model, 'test', test_questions, test_articles_title, test_articles_content, test_target)
+        self.__semi_test_model(model, 'test', test_questions, test_articles_title, test_articles_content, test_target)
+
+        questions_words = test_questions.shape[1]
+        articles_title_words = test_articles_title.shape[1]
+        articles_content_words = test_articles_content.shape[1]
+
+        articles_id = np.array(list(Article.objects.order_by('id').values_list('id', flat=True)))
+        if os.path.isfile('%s/articles/articles_id.npy' % self.__workdir):
+            saved_data_ok = np.array_equal(self.__load_file('articles/articles_id'), articles_id)
+        else:
+            saved_data_ok = False
+        logging.info('saved data ok: %d' % saved_data_ok)
+
+        if not saved_data_ok:
+            self.__save_file('articles/articles_id', articles_id)
+        chunks = np.array_split(articles_id, 100)
+        i = 1
+        total = len(chunks)
+        for chunk_articles_id in chunks:
+            if not os.path.isfile('%s/articles/articles_content_chunk_%03d.npy' % (self.__workdir, i)) or not saved_data_ok:
+                self.__prepareArticles(chunk_articles_id, articles_title_words, 'articles/articles_title_chunk_%03d' % i, True, False)
+                self.__prepareArticles(chunk_articles_id, articles_content_words, 'articles/articles_content_chunk_%03d' % i, False, False)
+                logging.debug("progress: %d/%d (%.2f %%)" % (i, total, i / total * 100))
+            # else:
+            #     logging.debug("chunk %d already exists, skipping" % i)
+            i += 1
