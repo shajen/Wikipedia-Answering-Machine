@@ -10,3 +10,5 @@ pyemd
 numpy
 mwparserfromhell
 termcolor
+pydot
+graphviz

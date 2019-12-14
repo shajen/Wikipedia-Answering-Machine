@@ -90,7 +90,14 @@ class NeuralWeightCalculator():
         logging.debug("saving array %s to file: %s" % (str(data.shape), filename))
         np.save(filename, data)
 
-    def prepareData(self, questions, questionWords, articleTitleWords, articleWords, goodBadArticlesRatio):
+    def __load_file(self, name):
+        filename = '%s/%s.npy' % (self.__workdir, name)
+        logging.debug("loading array from file: %s" % filename)
+        data = np.load(filename)
+        logging.debug("data size: %s" % str(data.shape))
+        return data
+
+    def prepare_data(self, questions, questionWords, articleTitleWords, articleContentWords, goodBadArticlesRatio):
         logging.info('start preparing data')
 
         questions_id = list(map(lambda q: [q.id] * q.answer_set.count(), questions))
@@ -105,9 +112,9 @@ class NeuralWeightCalculator():
         logging.debug('bad articles: %d' % len(bad_articles_id))
 
         self.__prepareArticle(good_articles_id, articleTitleWords, 'good_articles_title_data', True)
-        self.__prepareArticle(good_articles_id, articleWords, 'good_articles_data', False)
+        self.__prepareArticle(good_articles_id, articleContentWords, 'good_articles_content_data', False)
         self.__prepareArticle(bad_articles_id, articleTitleWords, 'bad_articles_title_data', True)
-        self.__prepareArticle(bad_articles_id, articleWords, 'bad_articles_data', False)
+        self.__prepareArticle(bad_articles_id, articleContentWords, 'bad_articles_content_data', False)
         good_questions_data = self.__prepareQuestion(questions_id, questionWords)
         good_target = np.array([1.0] * good_questions_data.shape[0])
         bad_questions_data = np.random.permutation(np.repeat(good_questions_data, goodBadArticlesRatio, axis=0))
@@ -117,3 +124,93 @@ class NeuralWeightCalculator():
         self.__save_file('good_target', good_target)
         self.__save_file('bad_questions_data', bad_questions_data)
         self.__save_file('bad_target', bad_target)
+
+    def __prepare_dataset(self, train_data_percentage):
+        good_questions_data = self.__load_file('good_questions_data')
+        good_articles_title_data = self.__load_file('good_articles_title_data')
+        good_articles_content_data = self.__load_file('good_articles_content_data')
+        good_target = self.__load_file('good_target')
+
+        bad_questions_data = self.__load_file('bad_questions_data')
+        bad_articles_title_data = self.__load_file('bad_articles_title_data')
+        bad_articles_content_data = self.__load_file('bad_articles_content_data')
+        bad_target = self.__load_file('bad_target')
+
+        order = np.random.permutation(good_questions_data.shape[0] + bad_questions_data.shape[0])
+        questions = np.concatenate((good_questions_data, bad_questions_data))[order]
+        articles_title = np.concatenate((good_articles_title_data, bad_articles_title_data))[order]
+        articles_content = np.concatenate((good_articles_content_data, bad_articles_content_data))[order]
+        target = np.concatenate((good_target, bad_target))[order]
+
+        split_index = int(questions.shape[0] * train_data_percentage)
+        return ((questions[:split_index], articles_title[:split_index], articles_content[:split_index], target[:split_index]),
+                (questions[split_index:], articles_title[split_index:], articles_content[split_index:], target[split_index:]))
+
+    def train(self, train_data_percentage):
+        (train_data, test_data) = self.__prepare_dataset(train_data_percentage)
+        (train_questions, train_articles_title, train_articles_content, train_target) = train_data
+        (test_questions, test_articles_title, test_articles_content, test_target) = test_data
+        logging.debug("train dataset:")
+        logging.debug("questions: %s" % str(train_questions.shape))
+        logging.debug("articles_title: %s" % str(train_articles_title.shape))
+        logging.debug("articles_content: %s" % str(train_articles_content.shape))
+        logging.debug("target: %s" % str(train_target.shape))
+
+        logging.debug("train dataset:")
+        logging.debug("questions: %s" % str(test_questions.shape))
+        logging.debug("articles_title: %s" % str(test_articles_title.shape))
+        logging.debug("articles_content: %s" % str(test_articles_content.shape))
+        logging.debug("target: %s" % str(test_target.shape))
+
+        filters = 20
+        w2c = 100
+        questions_data_input = tf.keras.Input(shape=(train_questions.shape[1], w2c), name='questions')
+        questions_block = tf.keras.layers.Conv1D(filters, 5, activation='relu')(questions_data_input)
+        questions_block = tf.keras.layers.AveragePooling1D(2)(questions_block)
+        questions_block = tf.keras.layers.Conv1D(filters, 4, activation='relu')(questions_block)
+
+        articles_title_data_input = tf.keras.Input(shape=(train_articles_title.shape[1], w2c), name='articles_title')
+        articles_title_block = tf.keras.layers.Conv1D(filters, 5, activation='relu')(articles_title_data_input)
+        articles_title_block = tf.keras.layers.AveragePooling1D(2)(articles_title_block)
+        articles_title_block = tf.keras.layers.Conv1D(filters, 4, activation='relu')(articles_title_block)
+
+        articles_content_data_input = tf.keras.Input(shape=(train_articles_content.shape[1], w2c), name='articles_content')
+        articles_content_block = tf.keras.layers.Conv1D(filters, 5, activation='relu')(articles_content_data_input)
+        articles_content_block = tf.keras.layers.AveragePooling1D(2)(articles_content_block)
+        articles_content_block = tf.keras.layers.Conv1D(filters, 5, activation='relu')(articles_content_block)
+        articles_content_block = tf.keras.layers.AveragePooling1D(2)(articles_content_block)
+        articles_content_block = tf.keras.layers.Conv1D(filters, 5, activation='relu')(articles_content_block)
+        articles_content_block = tf.keras.layers.AveragePooling1D(2)(articles_content_block)
+        articles_content_block = tf.keras.layers.Conv1D(filters, 5, activation='relu')(articles_content_block)
+
+        x = tf.keras.layers.add([questions_block, articles_title_block, articles_content_block])
+        x = tf.keras.layers.Conv1D(filters, 2, activation='relu')(x)
+        x = tf.keras.layers.Conv1D(filters, 2, activation='relu')(x)
+        x = tf.keras.layers.Flatten()(x)
+        x = tf.keras.layers.Dense(20, activation='sigmoid')(x)
+        x = tf.keras.layers.Dense(1, activation='sigmoid', name='weight')(x)
+
+        model = tf.keras.Model(inputs=[questions_data_input, articles_title_data_input, articles_content_data_input], outputs=x, name='wiki_qa')
+        logging.info('trainable weights: %s' % model.count_params())
+        tf.keras.utils.plot_model(model, '%s/model.png' % self.__workdir, show_shapes=True)
+
+        save_callback = tf.keras.callbacks.ModelCheckpoint(filepath='%s/model.h5' % self.__workdir, verbose=0)
+        model.compile(
+            optimizer = tf.keras.optimizers.RMSprop(1e-3),
+            loss = tf.keras.losses.binary_crossentropy,
+            loss_weights = [0.2],
+            metrics = ['accuracy'])
+        model.fit(
+            { 'questions': train_questions, 'articles_title': train_articles_title, 'articles_content': train_articles_content },
+            { 'weight': train_target },
+            batch_size = 64,
+            epochs = 10,
+            validation_split = 0.2,
+            verbose = 1,
+            callbacks=[save_callback])
+        test_scores = model.evaluate(
+            { 'questions': test_questions, 'articles_title': test_articles_title, 'articles_content': test_articles_content },
+            { 'weight': test_target },
+            verbose = 2)
+        print('test dataset loss:', test_scores[0])
+        print('test dataset accuracy:', test_scores[1])

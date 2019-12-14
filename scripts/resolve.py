@@ -95,8 +95,6 @@ def resolve_questions_word2vec(args, questions_queue, method_name):
 
 def start_word2vec(args, questions, method_name):
     db.connections.close_all()
-    logging.getLogger("gensim").setLevel(logging.WARNING)
-    logging.getLogger("smart_open.smart_open_lib").setLevel(logging.WARNING)
     logging.info('topn: %s' % args.topn)
     method_name = '%s, topn: %03d, type: word2vec' % (method_name, args.topn)
     logging.info('method_name: %s' % method_name)
@@ -127,12 +125,13 @@ def start_neural(args, questions, method_name):
 
     neural_calculator = calculators.neural_weight_calculator.NeuralWeightCalculator(args.debug_top_items, args.word2vec_file, args.neural_model_work_directory, args.neural_model_skip_prepare_data)
     if not args.neural_model_skip_prepare_data:
-        neural_calculator.prepareData(
+        neural_calculator.prepare_data(
             questions,
             args.neural_model_questions_words_count,
             args.neural_model_articles_title_words_count,
             args.neural_model_articles_words_count,
             args.neural_model_good_bad_ratio)
+    neural_calculator.train(args.neural_model_train_data_percentage)
 
 def start(args, questions, method_name, neighbors, minimal_word_idf_weights, power_factors):
     logging.info('start')
@@ -148,6 +147,10 @@ def start(args, questions, method_name, neighbors, minimal_word_idf_weights, pow
     logging.info('finish')
 
 def run(*args):
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
+    logging.getLogger("gensim").setLevel(logging.WARNING)
+    logging.getLogger("tensorflow").setLevel(logging.WARNING)
+    logging.getLogger("smart_open.smart_open_lib").setLevel(logging.WARNING)
     try:
         args = shlex.split(args[0])
     except IndexError:
