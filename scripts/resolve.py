@@ -131,7 +131,8 @@ def start_neural(args, questions, method_name):
             args.neural_model_articles_title_words_count,
             args.neural_model_articles_words_count,
             args.neural_model_good_bad_ratio)
-    neural_calculator.train(args.neural_model_train_data_percentage)
+    if not args.neural_model_skip_training:
+        neural_calculator.train(args.neural_model_last_trained, args.neural_model_epoch, args.neural_model_train_data_percentage)
 
 def start(args, questions, method_name, neighbors, minimal_word_idf_weights, power_factors):
     logging.info('start')
@@ -171,6 +172,9 @@ def run(*args):
     parser.add_argument("-nm_tdp", "--neural_model_train_data_percentage", help="percentage of train data", type=float, default=0.8)
     parser.add_argument("-nm_wd", "--neural_model_work_directory", help="directory to save and read data during learing", type=str)
     parser.add_argument("-nm_spd", "--neural_model_skip_prepare_data", help="use already prepared dataset instead of generating new one", action='store_true')
+    parser.add_argument("-nm_e", "--neural_model_epoch", help="train n epoch", type=int, default=10)
+    parser.add_argument("-nm_st", "--neural_model_skip_training", help="use already trained model", action='store_true')
+    parser.add_argument("-nm_lt", "--neural_model_last_trained", help="use last trained model data", action='store_true')
     parser.add_argument("-w2vf", "--word2vec_file", help="path to word2vec model", type=str, default='', metavar="file")
     parser.add_argument('-m', '--method', help="method name to make unique in database", type=str, default='', metavar="method")
     parser.add_argument("-dti", "--debug_top_items", help="print top n items in debug", type=int, default=3, metavar="int")

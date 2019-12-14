@@ -4,6 +4,7 @@ from functools import reduce
 import gensim.models
 import logging
 import numpy as np
+import sys
 import tensorflow as tf
 
 class NeuralWeightCalculator():
@@ -146,35 +147,28 @@ class NeuralWeightCalculator():
         return ((questions[:split_index], articles_title[:split_index], articles_content[:split_index], target[:split_index]),
                 (questions[split_index:], articles_title[split_index:], articles_content[split_index:], target[split_index:]))
 
-    def train(self, train_data_percentage):
-        (train_data, test_data) = self.__prepare_dataset(train_data_percentage)
-        (train_questions, train_articles_title, train_articles_content, train_target) = train_data
-        (test_questions, test_articles_title, test_articles_content, test_target) = test_data
-        logging.debug("train dataset:")
-        logging.debug("questions: %s" % str(train_questions.shape))
-        logging.debug("articles_title: %s" % str(train_articles_title.shape))
-        logging.debug("articles_content: %s" % str(train_articles_content.shape))
-        logging.debug("target: %s" % str(train_target.shape))
+    def __test_model(self, model, questions, articles_title, articles_content, target):
+        test_scores = model.evaluate(
+            { 'questions': questions, 'articles_title': articles_title, 'articles_content': articles_content },
+            { 'weight': target },
+            verbose = 0)
+        logging.info('test dataset loss: %.4f' % test_scores[0])
+        logging.info('test dataset accuracy: %.4f' % test_scores[1])
 
-        logging.debug("train dataset:")
-        logging.debug("questions: %s" % str(test_questions.shape))
-        logging.debug("articles_title: %s" % str(test_articles_title.shape))
-        logging.debug("articles_content: %s" % str(test_articles_content.shape))
-        logging.debug("target: %s" % str(test_target.shape))
-
+    def __create_model(self, questions_size, articles_title_size, articles_content_size):
         filters = 20
         w2c = 100
-        questions_data_input = tf.keras.Input(shape=(train_questions.shape[1], w2c), name='questions')
+        questions_data_input = tf.keras.Input(shape=(questions_size, w2c), name='questions')
         questions_block = tf.keras.layers.Conv1D(filters, 5, activation='relu')(questions_data_input)
         questions_block = tf.keras.layers.AveragePooling1D(2)(questions_block)
         questions_block = tf.keras.layers.Conv1D(filters, 4, activation='relu')(questions_block)
 
-        articles_title_data_input = tf.keras.Input(shape=(train_articles_title.shape[1], w2c), name='articles_title')
+        articles_title_data_input = tf.keras.Input(shape=(articles_title_size, w2c), name='articles_title')
         articles_title_block = tf.keras.layers.Conv1D(filters, 5, activation='relu')(articles_title_data_input)
         articles_title_block = tf.keras.layers.AveragePooling1D(2)(articles_title_block)
         articles_title_block = tf.keras.layers.Conv1D(filters, 4, activation='relu')(articles_title_block)
 
-        articles_content_data_input = tf.keras.Input(shape=(train_articles_content.shape[1], w2c), name='articles_content')
+        articles_content_data_input = tf.keras.Input(shape=(articles_content_size, w2c), name='articles_content')
         articles_content_block = tf.keras.layers.Conv1D(filters, 5, activation='relu')(articles_content_data_input)
         articles_content_block = tf.keras.layers.AveragePooling1D(2)(articles_content_block)
         articles_content_block = tf.keras.layers.Conv1D(filters, 5, activation='relu')(articles_content_block)
@@ -191,26 +185,52 @@ class NeuralWeightCalculator():
         x = tf.keras.layers.Dense(1, activation='sigmoid', name='weight')(x)
 
         model = tf.keras.Model(inputs=[questions_data_input, articles_title_data_input, articles_content_data_input], outputs=x, name='wiki_qa')
-        logging.info('trainable weights: %s' % model.count_params())
         tf.keras.utils.plot_model(model, '%s/model.png' % self.__workdir, show_shapes=True)
+        return model
 
-        save_callback = tf.keras.callbacks.ModelCheckpoint(filepath='%s/model.h5' % self.__workdir, verbose=0)
+    def train(self, use_last_trained, epoch, train_data_percentage):
+        logging.info('training model')
+        (train_data, test_data) = self.__prepare_dataset(train_data_percentage)
+        (train_questions, train_articles_title, train_articles_content, train_target) = train_data
+        (test_questions, test_articles_title, test_articles_content, test_target) = test_data
+        logging.debug("train dataset:")
+        logging.debug("questions: %s" % str(train_questions.shape))
+        logging.debug("articles_title: %s" % str(train_articles_title.shape))
+        logging.debug("articles_content: %s" % str(train_articles_content.shape))
+        logging.debug("target: %s" % str(train_target.shape))
+
+        logging.debug("train dataset:")
+        logging.debug("questions: %s" % str(test_questions.shape))
+        logging.debug("articles_title: %s" % str(test_articles_title.shape))
+        logging.debug("articles_content: %s" % str(test_articles_content.shape))
+        logging.debug("target: %s" % str(test_target.shape))
+
+        if use_last_trained:
+            logging.info('use last trained model')
+            model = tf.keras.models.load_model('%s/model.h5' % self.__workdir)
+            self.__test_model(model, test_questions, test_articles_title, test_articles_content, test_target)
+        else:
+            logging.info('create model')
+            model = self.__create_model(train_questions.shape[1], train_articles_title.shape[1], train_articles_content.shape[1])
+        logging.info('trainable weights: %s' % model.count_params())
+
+        save_callback = tf.keras.callbacks.ModelCheckpoint(filepath='%s/model.h5' % self.__workdir, save_best_only=True, verbose=0)
         model.compile(
             optimizer = tf.keras.optimizers.RMSprop(1e-3),
             loss = tf.keras.losses.binary_crossentropy,
             loss_weights = [0.2],
             metrics = ['accuracy'])
-        model.fit(
-            { 'questions': train_questions, 'articles_title': train_articles_title, 'articles_content': train_articles_content },
-            { 'weight': train_target },
-            batch_size = 64,
-            epochs = 10,
-            validation_split = 0.2,
-            verbose = 1,
-            callbacks=[save_callback])
-        test_scores = model.evaluate(
-            { 'questions': test_questions, 'articles_title': test_articles_title, 'articles_content': test_articles_content },
-            { 'weight': test_target },
-            verbose = 2)
-        print('test dataset loss:', test_scores[0])
-        print('test dataset accuracy:', test_scores[1])
+        try:
+            model.fit(
+                { 'questions': train_questions, 'articles_title': train_articles_title, 'articles_content': train_articles_content },
+                { 'weight': train_target },
+                batch_size = 64,
+                epochs = epoch,
+                validation_split = 0.2,
+                verbose = 1,
+                callbacks=[save_callback])
+        except KeyboardInterrupt:
+            print('\n', file=sys.stderr)
+            logging.info('learing stoppped by user')
+
+        self.__test_model(model, test_questions, test_articles_title, test_articles_content, test_target)
