@@ -10,6 +10,9 @@ import sys
 import tensorflow as tf
 
 class NeuralWeightCalculator():
+    __W2V_SIZE = 100
+    __ARTICLES_CHUNKS = 100
+    
     def __init__(self, debug_top_items, model_file, workdir):
         self.__debug_top_items = debug_top_items
         self.__model_file = model_file
@@ -49,7 +52,7 @@ class NeuralWeightCalculator():
         if word in self.__word_id_to_vector:
             return self.__word_id_to_vector[word]
         else:
-            return np.array([0.0] * 100)
+            return np.array([0.0] * NeuralWeightCalculator.__W2V_SIZE)
 
     def __words2vec(self, words):
         return list(map(lambda word: self.__word2vec(word), words))
@@ -214,18 +217,17 @@ class NeuralWeightCalculator():
 
     def __create_model(self, questions_size, articles_title_size, articles_content_size):
         filters = 20
-        w2c = 100
-        questions_data_input = tf.keras.Input(shape=(questions_size, w2c), name='questions')
+        questions_data_input = tf.keras.Input(shape=(questions_size, NeuralWeightCalculator.__W2V_SIZE), name='questions')
         questions_block = tf.keras.layers.Conv1D(filters, 5, activation='relu')(questions_data_input)
         questions_block = tf.keras.layers.AveragePooling1D(2)(questions_block)
         questions_block = tf.keras.layers.Conv1D(filters, 4, activation='relu')(questions_block)
 
-        articles_title_data_input = tf.keras.Input(shape=(articles_title_size, w2c), name='articles_title')
+        articles_title_data_input = tf.keras.Input(shape=(articles_title_size, NeuralWeightCalculator.__W2V_SIZE), name='articles_title')
         articles_title_block = tf.keras.layers.Conv1D(filters, 5, activation='relu')(articles_title_data_input)
         articles_title_block = tf.keras.layers.AveragePooling1D(2)(articles_title_block)
         articles_title_block = tf.keras.layers.Conv1D(filters, 4, activation='relu')(articles_title_block)
 
-        articles_content_data_input = tf.keras.Input(shape=(articles_content_size, w2c), name='articles_content')
+        articles_content_data_input = tf.keras.Input(shape=(articles_content_size, NeuralWeightCalculator.__W2V_SIZE), name='articles_content')
         articles_content_block = tf.keras.layers.Conv1D(filters, 5, activation='relu')(articles_content_data_input)
         articles_content_block = tf.keras.layers.AveragePooling1D(2)(articles_content_block)
         articles_content_block = tf.keras.layers.Conv1D(filters, 5, activation='relu')(articles_content_block)
@@ -292,20 +294,8 @@ class NeuralWeightCalculator():
         except KeyboardInterrupt:
             logging.info('learing stoppped by user')
 
-    def test(self, train_data_percentage):
-        logging.info('testing model')
-        (train_data, test_data) = self.__prepare_dataset(train_data_percentage)
-        (test_questions, test_articles_title, test_articles_content, test_target) = test_data
-
-        logging.info('use last trained model')
-        model = tf.keras.models.load_model('%s/model.h5' % self.__workdir)
-        self.__simple_test_model(model, 'test', test_questions, test_articles_title, test_articles_content, test_target)
-        self.__semi_test_model(model, 'test', test_questions, test_articles_title, test_articles_content, test_target)
-
-        questions_words = test_questions.shape[1]
-        articles_title_words = test_articles_title.shape[1]
-        articles_content_words = test_articles_content.shape[1]
-
+    def  __prepare_articles_chunks(self, articles_title_words, articles_content_words):
+        logging.info('preparing articles chunks')
         articles_id = np.array(list(Article.objects.order_by('id').values_list('id', flat=True)))
         if os.path.isfile('%s/articles/articles_id.npy' % self.__workdir):
             saved_data_ok = np.array_equal(self.__load_file('articles/articles_id'), articles_id)
@@ -315,7 +305,7 @@ class NeuralWeightCalculator():
 
         if not saved_data_ok:
             self.__save_file('articles/articles_id', articles_id)
-        chunks = np.array_split(articles_id, 100)
+        chunks = np.array_split(articles_id, NeuralWeightCalculator.__ARTICLES_CHUNKS)
         i = 1
         total = len(chunks)
         for chunk_articles_id in chunks:
@@ -327,3 +317,17 @@ class NeuralWeightCalculator():
             # else:
             #     logging.debug("chunk %d already exists, skipping" % i)
             i += 1
+
+    def __full_test(self, model):
+        logging.info('full test')
+
+    def test(self, train_data_percentage):
+        logging.info('testing model')
+        (train_data, test_data) = self.__prepare_dataset(train_data_percentage)
+        (test_questions, test_articles_title, test_articles_content, test_target) = test_data
+
+        model = tf.keras.models.load_model('%s/model.h5' % self.__workdir)
+        self.__simple_test_model(model, 'test', test_questions, test_articles_title, test_articles_content, test_target)
+        self.__semi_test_model(model, 'test', test_questions, test_articles_title, test_articles_content, test_target)
+        self.__prepare_articles_chunks(test_articles_title.shape[1], test_articles_content.shape[1])
+        self.__full_test(model)
