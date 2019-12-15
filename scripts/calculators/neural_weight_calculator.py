@@ -332,8 +332,17 @@ class NeuralWeightCalculator():
             #     logging.debug("chunk %d already exists, skipping" % i)
             i += 1
 
-    def __full_test_article(self, model, questions_id, questions_data, article_id, article_title_data, article_content_data):
-        logging.debug("article_id: %d, title data size: %s, content data size: %s" % (article_id, str(article_title_data.shape), str(article_content_data.shape)))
+    def __full_test_article(self, model, questions_id, questions, article_id, article_title, article_content):
+        logging.debug("article_id: %d, title data size: %s, content data size: %s" % (article_id, str(article_title.shape), str(article_content.shape)))
+        articles_title = np.repeat([article_title], questions.shape[0], 0)
+        articles_content = np.repeat([article_content], questions.shape[0], 0)
+        logging.debug("%s" % str (questions.shape))
+        logging.debug("%s" % str (articles_title.shape))
+        logging.debug("%s" % str (articles_content.shape))
+        predictet_target = model.predict(
+            { 'questions': questions, 'articles_title': articles_title, 'articles_content': articles_content },
+            batch_size=64,
+            verbose=0)
 
     def __full_test(self, model):
         logging.info('full test')
