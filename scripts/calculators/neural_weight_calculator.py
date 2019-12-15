@@ -10,14 +10,17 @@ import sys
 import tensorflow as tf
 
 class NeuralWeightCalculator():
-    def __init__(self, debug_top_items, model_file, workdir, skip_prepare_data):
+    def __init__(self, debug_top_items, model_file, workdir):
         self.__debug_top_items = debug_top_items
+        self.__model_file = model_file
         self.__workdir = workdir
+        self.__data_loaded = False
 
-        if skip_prepare_data:
-            logging.info('skipping reading data')
+    def __load_data(self):
+        if self.__data_loaded:
             return
 
+        logging.info('loading data')
         logging.info('reading base forms')
         stop_words_id = list(Word.objects.filter(is_stop_word=True).values_list('id', flat=True))
         self.__changed_word_id_to_base_form_id = {}
@@ -25,7 +28,7 @@ class NeuralWeightCalculator():
             self.__changed_word_id_to_base_form_id[changed_word_id] = base_word_id
 
         logging.info('reading word2vec model')
-        self.__word2vec_model = gensim.models.KeyedVectors.load(model_file)
+        self.__word2vec_model = gensim.models.KeyedVectors.load(self.__model_file)
 
         logging.info('reading words vec value')
         self.__word_id_to_vector = {}
@@ -35,6 +38,7 @@ class NeuralWeightCalculator():
             except KeyError:
                 pass
         logging.info('words vec size: %d' % (len(self.__word_id_to_vector)))
+        self.__data_loaded = True
 
     def __colored(self, text, colour):
         return colored(text, colour, attrs={'bold'})
@@ -114,6 +118,7 @@ class NeuralWeightCalculator():
 
     def prepare_data(self, questions, questionWords, articleTitleWords, articleContentWords, goodBadArticlesRatio):
         logging.info('start preparing data')
+        self.__load_data()
 
         questions_id = list(map(lambda q: [q.id] * q.answer_set.count(), questions))
         questions_id = list(reduce(lambda x, y: x + y, questions_id, []))
@@ -315,6 +320,7 @@ class NeuralWeightCalculator():
         total = len(chunks)
         for chunk_articles_id in chunks:
             if not os.path.isfile('%s/articles/articles_content_chunk_%03d.npy' % (self.__workdir, i)) or not saved_data_ok:
+                self.__load_data()
                 self.__prepareArticles(chunk_articles_id, articles_title_words, 'articles/articles_title_chunk_%03d' % i, True, False)
                 self.__prepareArticles(chunk_articles_id, articles_content_words, 'articles/articles_content_chunk_%03d' % i, False, False)
                 logging.debug("progress: %d/%d (%.2f %%)" % (i, total, i / total * 100))
