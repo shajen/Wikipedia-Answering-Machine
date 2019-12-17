@@ -11,7 +11,7 @@ import tensorflow as tf
 
 class NeuralWeightCalculator():
     __W2V_SIZE = 100
-    __ARTICLES_CHUNKS = 100
+    __ARTICLES_CHUNKS = 10000
 
     def __init__(self, debug_top_items, model_file, workdir):
         self.__debug_top_items = debug_top_items
@@ -240,24 +240,33 @@ class NeuralWeightCalculator():
         articles_block = tf.keras.layers.add([title_block, content_block], name='articles_output')
         return tf.keras.Model([title_input, content_input], articles_block, name='articles_model')
 
-    def __create_distances_model(self, filters, questions_size, articles_title_size, articles_content_size):
+    def __create_distances_model(self, filters, questions_size, articles_title_size, articles_content_size, bypass_models):
         questions_model = self.__create_questions_model(filters, questions_size)
         articles_model = self.__create_articles_model(filters, articles_title_size, articles_content_size)
 
-        questions_input = tf.keras.Input(shape=(questions_size, NeuralWeightCalculator.__W2V_SIZE), name='questions')
-        articles_title_input = tf.keras.Input(shape=(articles_title_size, NeuralWeightCalculator.__W2V_SIZE), name='articles_title')
-        articles_content_input = tf.keras.Input(shape=(articles_content_size, NeuralWeightCalculator.__W2V_SIZE), name='articles_content')
+        def add_layers(x):
+            x = tf.keras.layers.Conv1D(filters, 2, activation='relu')(x)
+            x = tf.keras.layers.Conv1D(filters, 2, activation='relu')(x)
+            x = tf.keras.layers.Flatten()(x)
+            x = tf.keras.layers.Dense(20, activation='sigmoid')(x)
+            x = tf.keras.layers.Dense(1, activation='sigmoid', name='weight')(x)
+            return x
 
-        x = tf.keras.layers.add([questions_model(questions_input), articles_model([articles_title_input, articles_content_input])])
-        x = tf.keras.layers.Conv1D(filters, 2, activation='relu')(x)
-        x = tf.keras.layers.Conv1D(filters, 2, activation='relu')(x)
-        x = tf.keras.layers.Flatten()(x)
-        x = tf.keras.layers.Dense(20, activation='sigmoid')(x)
-        x = tf.keras.layers.Dense(1, activation='sigmoid', name='weight')(x)
-        return tf.keras.Model(inputs=[questions_input, articles_title_input, articles_content_input], outputs=x, name='distances_model')
+        if not bypass_models:
+            questions_input = tf.keras.Input(shape=(questions_size, NeuralWeightCalculator.__W2V_SIZE), name='questions')
+            articles_title_input = tf.keras.Input(shape=(articles_title_size, NeuralWeightCalculator.__W2V_SIZE), name='articles_title')
+            articles_content_input = tf.keras.Input(shape=(articles_content_size, NeuralWeightCalculator.__W2V_SIZE), name='articles_content')
+
+            x = tf.keras.layers.add([questions_model(questions_input), articles_model([articles_title_input, articles_content_input])])
+            return tf.keras.Model(inputs=[questions_input, articles_title_input, articles_content_input], outputs=add_layers(x), name='distances_model')
+        else:
+            questions_input = tf.keras.Input(shape=questions_model.output.shape[1:], name='questions')
+            articles_input = tf.keras.Input(shape=articles_model.output.shape[1:], name='articles')
+            x = tf.keras.layers.add([questions_input, articles_input])
+            return tf.keras.Model(inputs=[questions_input, articles_input], outputs=add_layers(x), name='distances_model')
 
     def __create_model(self, questions_size, articles_title_size, articles_content_size):
-        model = self.__create_distances_model(20, questions_size, articles_title_size, articles_content_size)
+        model = self.__create_distances_model(20, questions_size, articles_title_size, articles_content_size, False)
         tf.keras.utils.plot_model(model, '%s/model.png' % self.__workdir, show_shapes=True, expand_nested=True)
         return model
 
@@ -346,33 +355,60 @@ class NeuralWeightCalculator():
             #     logging.debug("chunk %d already exists, skipping" % i)
             i += 1
 
-    def __full_test_article(self, model, questions_id, questions, article_id, article_title, article_content):
-        logging.debug("article_id: %d, title data size: %s, content data size: %s" % (article_id, str(article_title.shape), str(article_content.shape)))
-        articles_title = np.repeat([article_title], questions.shape[0], 0)
-        articles_content = np.repeat([article_content], questions.shape[0], 0)
-        logging.debug("%s" % str (questions.shape))
-        logging.debug("%s" % str (articles_title.shape))
-        logging.debug("%s" % str (articles_content.shape))
-        predictet_target = model.predict(
-            { 'questions': questions, 'articles_title': articles_title, 'articles_content': articles_content },
-            batch_size=64,
+    def __full_test_articles(self, articles_model, bypass_model, questions_id, questions_output, articles_id, articles_title, articles_content):
+        logging.debug("questions: %s, articles id: %s, title: %s, content: %s" % (str(questions_output.shape), str(articles_id.shape), str(articles_title.shape), str(articles_content.shape)))
+        articles_output = articles_model.predict(
+            { 'articles_title': articles_title, 'articles_content': articles_content },
+            batch_size=256,
+            verbose=0)
+        articles_output = np.repeat(articles_output, questions_id.shape[0], 0)
+        questions_output = np.repeat([questions_output], articles_id.shape[0], 0).reshape(articles_id.shape[0] * questions_output.shape[0], questions_output.shape[1], questions_output.shape[2])
+        predictet_target = bypass_model.predict(
+            { 'questions': questions_output, 'articles': articles_output},
+            batch_size=256,
             verbose=0)
 
-    def __full_test(self, model):
+    def __full_test(self, model, questions_model, articles_model, bypass_model):
         logging.info('full test')
         questions_id = self.__load_file('questions_id')
         questions_data = self.__load_file('questions_data')
+        questions_output = predictet_target = questions_model.predict(questions_data, batch_size=64, verbose=0)
         articles_id = self.__load_file('articles/articles_id')
         article_counter = 0
         total = NeuralWeightCalculator.__ARTICLES_CHUNKS
         for i in range(1, NeuralWeightCalculator.__ARTICLES_CHUNKS + 1):
             chunks_articles_title_data = self.__load_file('articles/articles_title_chunk_%03d' % i)
             chunks_articles_content_data = self.__load_file('articles/articles_content_chunk_%03d' % i)
-            for j in range(0, chunks_articles_title_data.shape[0]):
-                article_id = articles_id[article_counter]
-                article_counter += 1
-                self.__full_test_article(model, questions_id, questions_data, article_id, chunks_articles_title_data[j], chunks_articles_content_data[j])
+            chunks_articles_id = articles_id[article_counter:article_counter+chunks_articles_title_data.shape[0]]
+            article_counter += chunks_articles_title_data.shape[0]
+            self.__full_test_articles(articles_model, bypass_model, questions_id, questions_output, chunks_articles_id, chunks_articles_title_data, chunks_articles_content_data)
             logging.debug("progress: %d/%d (%.2f %%)" % (i, total, i / total * 100))
+
+    def __prepare_bypass_model(self, model, bypass_model):
+        for l1 in model.layers:
+            for l2 in bypass_model.layers:
+                if type(l1) == type(l2) and l1.input_shape == l2.input_shape and l1.output_shape == l2.output_shape:
+                    l2.set_weights(l1.get_weights())
+
+    def __extract_models(self, model):
+        questions_model = None
+        articles_model = None
+        for l in model.layers:
+            if isinstance(l, tf.keras.Model):
+                if l.name == "questions_model":
+                    questions_model = l
+                if l.name == "articles_model":
+                    articles_model = l
+        return (questions_model, articles_model)
+
+    def __print_model(model):
+        logging.debug(model.name)
+        logging.debug("  inputs:")
+        for i in model.inputs:
+            logging.debug("    %s" % str(i.shape))
+        logging.debug("  outputs:")
+        for i in model.outputs:
+            logging.debug("    %s" % str(i.shape))
 
     def test(self, train_data_percentage):
         logging.info('testing model')
@@ -380,8 +416,15 @@ class NeuralWeightCalculator():
         (test_questions, test_articles_title, test_articles_content, test_target) = test_data
 
         model = tf.keras.models.load_model('%s/model.h5' % self.__workdir)
+        (questions_model, articles_model) = self.__extract_models(model)
+        bypass_model = self.__create_distances_model(20, test_questions.shape[1], test_articles_title.shape[1], test_articles_content.shape[1], True)
+        self.__prepare_bypass_model(model, bypass_model)
+        NeuralWeightCalculator.__print_model(model)
+        NeuralWeightCalculator.__print_model(questions_model)
+        NeuralWeightCalculator.__print_model(articles_model)
+        NeuralWeightCalculator.__print_model(bypass_model)
         self.__simple_test_model(model, 'test', test_questions, test_articles_title, test_articles_content, test_target)
         self.__semi_test_model(model, 'test', test_questions, test_articles_title, test_articles_content, test_target)
         self.__prepare_all_questions(test_questions.shape[1])
         self.__prepare_all_articles(test_articles_title.shape[1], test_articles_content.shape[1])
-        self.__full_test(model)
+        self.__full_test(model, questions_model, articles_model, bypass_model)
