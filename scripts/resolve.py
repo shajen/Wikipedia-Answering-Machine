@@ -124,17 +124,10 @@ def start_neural(args, questions, method_name):
     logging.info("train_data_percentage: %.2f" % args.neural_model_train_data_percentage)
     logging.info("epoch: %d" % args.neural_model_epoch)
 
-    neural_calculator = calculators.neural_weight_calculator.NeuralWeightCalculator(args.debug_top_items, args.word2vec_file, args.neural_model_work_directory)
-    if not args.neural_model_skip_prepare_data:
-        neural_calculator.prepare_data(
-            questions,
-            args.neural_model_questions_words_count,
-            args.neural_model_articles_title_words_count,
-            args.neural_model_articles_words_count,
-            args.neural_model_good_bad_ratio)
+    neural_calculator = calculators.neural_weight_calculator.NeuralWeightCalculator(args.debug_top_items, args.word2vec_file, args.neural_model_work_directory, args.neural_model_questions_words_count, args.neural_model_articles_title_words_count, args.neural_model_articles_words_count, args.neural_model_good_bad_ratio, args.neural_model_train_data_percentage)
     if not args.neural_model_skip_training:
-        neural_calculator.train(args.neural_model_last_trained, args.neural_model_epoch, args.neural_model_train_data_percentage)
-    neural_calculator.test(args.neural_model_train_data_percentage)
+        neural_calculator.train(args.neural_model_last_trained, args.neural_model_epoch)
+    neural_calculator.test()
 
 def start(args, questions, method_name, neighbors, minimal_word_idf_weights, power_factors):
     logging.info('start')
@@ -173,7 +166,6 @@ def run(*args):
     parser.add_argument("-nm_gbr", "--neural_model_good_bad_ratio", help="ratio between good and bad articles", type=int, default=3)
     parser.add_argument("-nm_tdp", "--neural_model_train_data_percentage", help="percentage of train data", type=float, default=0.8)
     parser.add_argument("-nm_wd", "--neural_model_work_directory", help="directory to save and read data during learing", type=str)
-    parser.add_argument("-nm_spd", "--neural_model_skip_prepare_data", help="use already prepared dataset instead of generating new one", action='store_true')
     parser.add_argument("-nm_e", "--neural_model_epoch", help="train n epoch", type=int, default=10)
     parser.add_argument("-nm_st", "--neural_model_skip_training", help="use already trained model", action='store_true')
     parser.add_argument("-nm_lt", "--neural_model_last_trained", help="use last trained model data", action='store_true')

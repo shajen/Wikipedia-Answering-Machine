@@ -13,11 +13,17 @@ class NeuralWeightCalculator():
     __W2V_SIZE = 100
     __ARTICLES_CHUNKS = 10000
 
-    def __init__(self, debug_top_items, model_file, workdir):
+    def __init__(self, debug_top_items, model_file, workdir, questions_words, articles_title_words, articles_content_words, good_bad_ratio, train_data_percentage):
         self.__debug_top_items = debug_top_items
         self.__model_file = model_file
         self.__workdir = workdir
+        self.__questions_words = questions_words
+        self.__articles_title_words = articles_title_words
+        self.__articles_content_words = articles_content_words
+        self.__good_bad_ratio = good_bad_ratio
+        self.__train_data_percentage = train_data_percentage
         self.__data_loaded = False
+        self.__dataset_loaded = False
 
     def __load_data(self):
         if self.__data_loaded:
@@ -69,7 +75,7 @@ class NeuralWeightCalculator():
                     pass
         return self.__words2vec(article_words)
 
-    def __prepare_articles(self, articles_id, words, name, is_title, show_progress):
+    def __prepare_articles(self, articles_id, words, is_title, show_progress):
         logging.debug('preparing %d articles, top words: %d, title: %d' %(len(articles_id), words, is_title))
         data = []
         total = len(articles_id)
@@ -80,7 +86,9 @@ class NeuralWeightCalculator():
             current += 1
             if current % step == 0 and show_progress:
                 logging.debug("progress: %d/%d (%.2f %%)" % (current, total, current / total * 100))
-        self.__save_file(name, np.array(data))
+        data = np.array(data)
+        logging.debug("data size: %s" % str(data.shape))
+        return data
 
     def __prepare_question(self, question_id, words):
         question_words = [None] * words
@@ -119,10 +127,11 @@ class NeuralWeightCalculator():
         logging.debug("data size: %s" % str(data.shape))
         return data
 
-    def prepare_data(self, questions, questionWords, articleTitleWords, articleContentWords, goodBadArticlesRatio):
-        logging.info('start preparing data')
+    def __generate_dataset(self):
+        logging.info('start generating dataset')
         self.__load_data()
 
+        questions = Question.objects.all()
         questions_id = list(map(lambda q: [q.id] * q.answer_set.count(), questions))
         questions_id = list(reduce(lambda x, y: x + y, questions_id, []))
         logging.debug('questions: %d' % len(questions_id))
@@ -131,34 +140,19 @@ class NeuralWeightCalculator():
         good_articles_id = list(reduce(lambda x, y: x + y, good_articles_id, []))
         logging.debug('good articles: %d' % len(good_articles_id))
 
-        bad_articles_id = list(Article.objects.exclude(id__in=good_articles_id).order_by('?').values_list('id', flat=True)[:goodBadArticlesRatio * len(good_articles_id)])
+        bad_articles_id = list(Article.objects.exclude(id__in=good_articles_id).order_by('?').values_list('id', flat=True)[:self.__good_bad_ratio * len(good_articles_id)])
         logging.debug('bad articles: %d' % len(bad_articles_id))
 
-        self.__prepare_articles(good_articles_id, articleTitleWords, 'good_articles_title_data', True, True)
-        self.__prepare_articles(good_articles_id, articleContentWords, 'good_articles_content_data', False, True)
-        self.__prepare_articles(bad_articles_id, articleTitleWords, 'bad_articles_title_data', True, True)
-        self.__prepare_articles(bad_articles_id, articleContentWords, 'bad_articles_content_data', False, True)
-        good_questions_data = self.__prepare_questions(questions_id, questionWords)
+        good_articles_title_data = self.__prepare_articles(good_articles_id, self.__articles_title_words, True, True)
+        good_articles_content_data = self.__prepare_articles(good_articles_id, self.__articles_content_words, False, True)
+        bad_articles_title_data = self.__prepare_articles(bad_articles_id, self.__articles_title_words, True, True)
+        bad_articles_content_data = self.__prepare_articles(bad_articles_id, self.__articles_content_words, False, True)
+        good_questions_data = self.__prepare_questions(questions_id, self.__questions_words)
         good_target = np.array([1.0] * good_questions_data.shape[0])
-        bad_questions_data = np.random.permutation(np.repeat(good_questions_data, goodBadArticlesRatio, axis=0))
+        bad_questions_data = np.repeat(good_questions_data, self.__good_bad_ratio, axis=0)
         bad_target = np.array([0.0] * bad_questions_data.shape[0])
-
-        self.__save_file('good_questions_data', good_questions_data)
-        self.__save_file('good_target', good_target)
-        self.__save_file('bad_questions_data', bad_questions_data)
-        self.__save_file('bad_target', bad_target)
-
-    def __prepare_dataset(self, train_data_percentage):
-        logging.info('preparing dataset')
-        good_questions_data = self.__load_file('good_questions_data')
-        good_articles_title_data = self.__load_file('good_articles_title_data')
-        good_articles_content_data = self.__load_file('good_articles_content_data')
-        good_target = self.__load_file('good_target')
-
-        bad_questions_data = self.__load_file('bad_questions_data')
-        bad_articles_title_data = self.__load_file('bad_articles_title_data')
-        bad_articles_content_data = self.__load_file('bad_articles_content_data')
-        bad_target = self.__load_file('bad_target')
+        articles_id = np.concatenate((np.array(good_articles_id), np.array(bad_articles_id)))
+        questions_id = np.repeat(np.array([questions_id]), self.__good_bad_ratio + 1, axis=0).reshape(-1)
 
         order = np.random.permutation(good_questions_data.shape[0] + bad_questions_data.shape[0])
         questions = np.concatenate((good_questions_data, bad_questions_data))[order]
@@ -166,34 +160,76 @@ class NeuralWeightCalculator():
         articles_content = np.concatenate((good_articles_content_data, bad_articles_content_data))[order]
         target = np.concatenate((good_target, bad_target))[order]
 
-        split_index = int(questions.shape[0] * train_data_percentage)
+        split_index = int(questions.shape[0] * self.__train_data_percentage)
+        train_questions_id = questions_id[:split_index]
         train_questions = questions[:split_index]
+        train_articles_id = articles_id[:split_index]
         train_articles_title = articles_title[:split_index]
         train_articles_content = articles_content[:split_index]
         train_target = target[:split_index]
 
+        test_questions_id = questions_id[split_index:]
         test_questions = questions[split_index:]
+        test_articles_id = articles_id[split_index:]
         test_articles_title = articles_title[split_index:]
         test_articles_content = articles_content[split_index:]
         test_target = target[split_index:]
 
-        logging.info("train samples: %d" %train_questions.shape[0])
-        logging.info("test samples: %d" %test_questions.shape[0])
+        self.__save_file('train_questions_id', train_questions_id)
+        self.__save_file('train_questions', train_questions)
+        self.__save_file('train_articles_id', train_articles_id)
+        self.__save_file('train_articles_title', train_articles_title)
+        self.__save_file('train_articles_content', train_articles_content)
+        self.__save_file('train_targets', train_target)
+
+        self.__save_file('test_questions_id', test_questions_id)
+        self.__save_file('test_questions', test_questions)
+        self.__save_file('test_articles_id', test_articles_id)
+        self.__save_file('test_articles_title', test_articles_title)
+        self.__save_file('test_articles_content', test_articles_content)
+        self.__save_file('test_targets', test_target)
+
+    def __load_dataset(self):
+        if self.__dataset_loaded:
+            return
+
+        if not os.path.isfile('%s/test_targets.npy' % self.__workdir):
+            self.__generate_dataset()
+
+        self.__train_questions_id = self.__load_file('train_questions_id')
+        self.__train_questions = self.__load_file('train_questions')
+        self.__train_articles_id = self.__load_file('train_articles_id')
+        self.__train_articles_title = self.__load_file('train_articles_title')
+        self.__train_articles_content = self.__load_file('train_articles_content')
+        self.__train_targets = self.__load_file('train_targets')
+
+        self.__test_questions_id = self.__load_file('test_questions_id')
+        self.__test_questions = self.__load_file('test_questions')
+        self.__test_articles_id = self.__load_file('test_articles_id')
+        self.__test_articles_title = self.__load_file('test_articles_title')
+        self.__test_articles_content = self.__load_file('test_articles_content')
+        self.__test_targets = self.__load_file('test_targets')
+
+        logging.info("train samples: %d" % self.__train_questions.shape[0])
+        logging.info("test samples: %d" % self.__test_questions.shape[0])
 
         logging.debug("train dataset:")
-        logging.debug("questions: %s" % str(train_questions.shape))
-        logging.debug("articles_title: %s" % str(train_articles_title.shape))
-        logging.debug("articles_content: %s" % str(train_articles_content.shape))
-        logging.debug("target: %s" % str(train_target.shape))
+        logging.debug("questions_id: %s" % str(self.__train_questions_id.shape))
+        logging.debug("questions: %s" % str(self.__train_questions.shape))
+        logging.debug("articles_id: %s" % str(self.__train_articles_id.shape))
+        logging.debug("articles_title: %s" % str(self.__train_articles_title.shape))
+        logging.debug("articles_content: %s" % str(self.__train_articles_content.shape))
+        logging.debug("targets: %s" % str(self.__train_targets.shape))
 
         logging.debug("train dataset:")
-        logging.debug("questions: %s" % str(test_questions.shape))
-        logging.debug("articles_title: %s" % str(test_articles_title.shape))
-        logging.debug("articles_content: %s" % str(test_articles_content.shape))
-        logging.debug("target: %s" % str(test_target.shape))
+        logging.debug("questions_id: %s" % str(self.__test_questions_id.shape))
+        logging.debug("questions: %s" % str(self.__test_questions.shape))
+        logging.debug("articles_id: %s" % str(self.__test_articles_id.shape))
+        logging.debug("articles_title: %s" % str(self.__test_articles_title.shape))
+        logging.debug("articles_content: %s" % str(self.__test_articles_content.shape))
+        logging.debug("targets: %s" % str(self.__test_targets.shape))
 
-        return ((train_questions, train_articles_title, train_articles_content, train_target),
-                (test_questions, test_articles_title, test_articles_content, test_target))
+        self.__dataset_loaded = True
 
     def __simple_test_model(self, model, dataset_name, questions, articles_title, articles_content, target):
         test_scores = model.evaluate(
@@ -215,20 +251,20 @@ class NeuralWeightCalculator():
         r2 = self.__colored('%.2f %%' % (corrected_count / total_count * 100), 'yellow')
         logging.info("semi test, dataset: %s, corrected: %s (%s)" % (dataset_name, r1, r2))
 
-    def __create_questions_model(self, filters, questions_size):
-        input = tf.keras.Input(shape=(questions_size, NeuralWeightCalculator.__W2V_SIZE), name='questions')
+    def __create_questions_model(self, filters):
+        input = tf.keras.Input(shape=(self.__questions_words, NeuralWeightCalculator.__W2V_SIZE), name='questions')
         block = tf.keras.layers.Conv1D(filters, 5, activation='relu')(input)
         block = tf.keras.layers.AveragePooling1D(2)(block)
         block = tf.keras.layers.Conv1D(filters, 4, activation='relu', name='questions_output')(block)
         return tf.keras.Model(input, block, name='questions_model')
 
-    def __create_articles_model(self, filters, title_size, content_size):
-        title_input = tf.keras.Input(shape=(title_size, NeuralWeightCalculator.__W2V_SIZE), name='articles_title')
+    def __create_articles_model(self, filters):
+        title_input = tf.keras.Input(shape=(self.__articles_title_words, NeuralWeightCalculator.__W2V_SIZE), name='articles_title')
         title_block = tf.keras.layers.Conv1D(filters, 5, activation='relu')(title_input)
         title_block = tf.keras.layers.AveragePooling1D(2)(title_block)
         title_block = tf.keras.layers.Conv1D(filters, 4, activation='relu')(title_block)
 
-        content_input = tf.keras.Input(shape=(content_size, NeuralWeightCalculator.__W2V_SIZE), name='articles_content')
+        content_input = tf.keras.Input(shape=(self.__articles_content_words, NeuralWeightCalculator.__W2V_SIZE), name='articles_content')
         content_block = tf.keras.layers.Conv1D(filters, 5, activation='relu')(content_input)
         content_block = tf.keras.layers.AveragePooling1D(2)(content_block)
         content_block = tf.keras.layers.Conv1D(filters, 5, activation='relu')(content_block)
@@ -240,9 +276,9 @@ class NeuralWeightCalculator():
         articles_block = tf.keras.layers.add([title_block, content_block], name='articles_output')
         return tf.keras.Model([title_input, content_input], articles_block, name='articles_model')
 
-    def __create_distances_model(self, filters, questions_size, articles_title_size, articles_content_size, bypass_models):
-        questions_model = self.__create_questions_model(filters, questions_size)
-        articles_model = self.__create_articles_model(filters, articles_title_size, articles_content_size)
+    def __create_distances_model(self, filters, bypass_models):
+        questions_model = self.__create_questions_model(filters)
+        articles_model = self.__create_articles_model(filters)
 
         def add_layers(x):
             x = tf.keras.layers.Conv1D(filters, 2, activation='relu')(x)
@@ -253,9 +289,9 @@ class NeuralWeightCalculator():
             return x
 
         if not bypass_models:
-            questions_input = tf.keras.Input(shape=(questions_size, NeuralWeightCalculator.__W2V_SIZE), name='questions')
-            articles_title_input = tf.keras.Input(shape=(articles_title_size, NeuralWeightCalculator.__W2V_SIZE), name='articles_title')
-            articles_content_input = tf.keras.Input(shape=(articles_content_size, NeuralWeightCalculator.__W2V_SIZE), name='articles_content')
+            questions_input = tf.keras.Input(shape=(self.__questions_words, NeuralWeightCalculator.__W2V_SIZE), name='questions')
+            articles_title_input = tf.keras.Input(shape=(self.__articles_title_words, NeuralWeightCalculator.__W2V_SIZE), name='articles_title')
+            articles_content_input = tf.keras.Input(shape=(self.__articles_content_words, NeuralWeightCalculator.__W2V_SIZE), name='articles_content')
 
             x = tf.keras.layers.add([questions_model(questions_input), articles_model([articles_title_input, articles_content_input])])
             return tf.keras.Model(inputs=[questions_input, articles_title_input, articles_content_input], outputs=add_layers(x), name='distances_model')
@@ -265,33 +301,30 @@ class NeuralWeightCalculator():
             x = tf.keras.layers.add([questions_input, articles_input])
             return tf.keras.Model(inputs=[questions_input, articles_input], outputs=add_layers(x), name='distances_model')
 
-    def __create_model(self, questions_size, articles_title_size, articles_content_size):
-        model = self.__create_distances_model(20, questions_size, articles_title_size, articles_content_size, False)
+    def __create_model(self):
+        model = self.__create_distances_model(20, False)
         tf.keras.utils.plot_model(model, '%s/model.png' % self.__workdir, show_shapes=True, expand_nested=True)
         return model
 
-    def train(self, use_last_trained, epoch, train_data_percentage):
+    def train(self, use_last_trained, epoch):
         logging.info('training model')
-        (train_data, test_data) = self.__prepare_dataset(train_data_percentage)
-        (train_questions, train_articles_title, train_articles_content, train_target) = train_data
-        (test_questions, test_articles_title, test_articles_content, test_target) = test_data
+        self.__load_dataset()
 
         if use_last_trained:
             logging.info('use last trained model')
             model = tf.keras.models.load_model('%s/model.h5' % self.__workdir)
-            self.__simple_test_model(model, 'test', test_questions, test_articles_title, test_articles_content, test_target)
-            self.__semi_test_model(model, 'test', test_questions, test_articles_title, test_articles_content, test_target)
-
+            self.__simple_test_model(model, 'test', self.__test_questions, self.__test_articles_title, self.__test_articles_content, self.__test_targets)
+            self.__semi_test_model(model, 'test', self.__test_questions, self.__test_articles_title, self.__test_articles_content, self.__test_targets)
         else:
             logging.info('create model')
-            model = self.__create_model(train_questions.shape[1], train_articles_title.shape[1], train_articles_content.shape[1])
+            model = self.__create_model()
         logging.info('trainable weights: %s' % model.count_params())
 
         def on_epoch_end(current_epoch, data):
             try:
                 logging.info("after epoch %d/%d, loss: %.6f, accuracy: %.6f, val_loss: %.6f, val_accuracy: %.6f" % (current_epoch, epoch, data['loss'], data['accuracy'], data['val_loss'], data['val_accuracy']))
                 # self.__simple_test_model(model, 'test', test_questions, test_articles_title, test_articles_content, test_target)
-                self.__semi_test_model(model, 'test', test_questions, test_articles_title, test_articles_content, test_target)
+                self.__semi_test_model(model, 'test', self.__test_questions, self.__test_articles_title, self.__test_articles_content, self.__test_targets)
             except:
                 pass
 
@@ -305,19 +338,19 @@ class NeuralWeightCalculator():
             metrics = ['accuracy'])
         try:
             model.fit(
-                { 'questions': train_questions, 'articles_title': train_articles_title, 'articles_content': train_articles_content },
-                { 'weight': train_target },
+                { 'questions': self.__train_questions, 'articles_title': self.__train_articles_title, 'articles_content': self.__train_articles_content },
+                { 'weight': self.__train_targets },
                 batch_size = 64,
                 epochs = epoch,
                 validation_split = 0.2,
                 verbose = 0,
                 callbacks=[save_callback, test_callback])
-            self.__simple_test_model(model, 'test', test_questions, test_articles_title, test_articles_content, test_target)
-            self.__semi_test_model(model, 'test', test_questions, test_articles_title, test_articles_content, test_target)
+            self.__simple_test_model(model, 'test', self.__test_questions, self.__test_articles_title, self.__test_articles_content, self.__test_targets)
+            self.__semi_test_model(model, 'test', self.__test_questions, self.__test_articles_title, self.__test_articles_content, self.__test_targets)
         except KeyboardInterrupt:
             logging.info('learing stoppped by user')
 
-    def  __prepare_all_questions(self, questions_words):
+    def  __prepare_all_questions(self):
         logging.info('preparing questions')
         questions_id = np.array(list(Question.objects.all().values_list('id', flat=True)))
         if os.path.isfile('%s/questions_id.npy' % self.__workdir) and os.path.isfile('%s/questions_data.npy' % self.__workdir):
@@ -327,11 +360,11 @@ class NeuralWeightCalculator():
         logging.info('saved data ok: %d' % saved_data_ok)
         if not saved_data_ok:
             self.__load_data()
-            questions_data = self.__prepare_questions(questions_id, questions_words)
+            questions_data = self.__prepare_questions(questions_id, self.__questions_words)
             self.__save_file('questions_id', questions_id)
             self.__save_file('questions_data', questions_data)
 
-    def  __prepare_all_articles(self, articles_title_words, articles_content_words):
+    def  __prepare_all_articles(self):
         logging.info('preparing articles chunks')
         articles_id = np.array(list(Article.objects.order_by('id').values_list('id', flat=True)))
         if os.path.isfile('%s/articles/articles_id.npy' % self.__workdir):
@@ -348,8 +381,10 @@ class NeuralWeightCalculator():
         for chunk_articles_id in chunks:
             if not os.path.isfile('%s/articles/articles_content_chunk_%03d.npy' % (self.__workdir, i)) or not saved_data_ok:
                 self.__load_data()
-                self.__prepare_articles(chunk_articles_id, articles_title_words, 'articles/articles_title_chunk_%03d' % i, True, False)
-                self.__prepare_articles(chunk_articles_id, articles_content_words, 'articles/articles_content_chunk_%03d' % i, False, False)
+                articles_title = self.__prepare_articles(chunk_articles_id, self.__articles_title_words, True, False)
+                self.__save_file('articles/articles_title_chunk_%03d' % i, articles_title)
+                articles_content = self.__prepare_articles(chunk_articles_id, self.__articles_content_words, False, False)
+                self.__save_file('articles/articles_content_chunk_%03d' % i, articles_content)
                 logging.debug("progress: %d/%d (%.2f %%)" % (i, total, i / total * 100))
             # else:
             #     logging.debug("chunk %d already exists, skipping" % i)
@@ -410,21 +445,20 @@ class NeuralWeightCalculator():
         for i in model.outputs:
             logging.debug("    %s" % str(i.shape))
 
-    def test(self, train_data_percentage):
+    def test(self):
         logging.info('testing model')
-        (train_data, test_data) = self.__prepare_dataset(train_data_percentage)
-        (test_questions, test_articles_title, test_articles_content, test_target) = test_data
+        self.__load_dataset()
 
         model = tf.keras.models.load_model('%s/model.h5' % self.__workdir)
         (questions_model, articles_model) = self.__extract_models(model)
-        bypass_model = self.__create_distances_model(20, test_questions.shape[1], test_articles_title.shape[1], test_articles_content.shape[1], True)
+        bypass_model = self.__create_distances_model(20, True)
         self.__prepare_bypass_model(model, bypass_model)
         NeuralWeightCalculator.__print_model(model)
         NeuralWeightCalculator.__print_model(questions_model)
         NeuralWeightCalculator.__print_model(articles_model)
         NeuralWeightCalculator.__print_model(bypass_model)
-        self.__simple_test_model(model, 'test', test_questions, test_articles_title, test_articles_content, test_target)
-        self.__semi_test_model(model, 'test', test_questions, test_articles_title, test_articles_content, test_target)
-        self.__prepare_all_questions(test_questions.shape[1])
-        self.__prepare_all_articles(test_articles_title.shape[1], test_articles_content.shape[1])
+        self.__simple_test_model(model, 'test', self.__test_questions, self.__test_articles_title, self.__test_articles_content, self.__test_targets)
+        self.__semi_test_model(model, 'test', self.__test_questions, self.__test_articles_title, self.__test_articles_content, self.__test_targets)
+        self.__prepare_all_questions()
+        self.__prepare_all_articles()
         self.__full_test(model, questions_model, articles_model, bypass_model)
