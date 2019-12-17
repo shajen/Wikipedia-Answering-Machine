@@ -215,36 +215,50 @@ class NeuralWeightCalculator():
         r2 = self.__colored('%.2f %%' % (corrected_count / total_count * 100), 'yellow')
         logging.info("semi test, dataset: %s, corrected: %s (%s)" % (dataset_name, r1, r2))
 
-    def __create_model(self, questions_size, articles_title_size, articles_content_size):
-        filters = 20
-        questions_data_input = tf.keras.Input(shape=(questions_size, NeuralWeightCalculator.__W2V_SIZE), name='questions')
-        questions_block = tf.keras.layers.Conv1D(filters, 5, activation='relu')(questions_data_input)
-        questions_block = tf.keras.layers.AveragePooling1D(2)(questions_block)
-        questions_block = tf.keras.layers.Conv1D(filters, 4, activation='relu')(questions_block)
+    def __create_questions_model(self, filters, questions_size):
+        input = tf.keras.Input(shape=(questions_size, NeuralWeightCalculator.__W2V_SIZE), name='questions')
+        block = tf.keras.layers.Conv1D(filters, 5, activation='relu')(input)
+        block = tf.keras.layers.AveragePooling1D(2)(block)
+        block = tf.keras.layers.Conv1D(filters, 4, activation='relu', name='questions_output')(block)
+        return tf.keras.Model(input, block, name='questions_model')
 
-        articles_title_data_input = tf.keras.Input(shape=(articles_title_size, NeuralWeightCalculator.__W2V_SIZE), name='articles_title')
-        articles_title_block = tf.keras.layers.Conv1D(filters, 5, activation='relu')(articles_title_data_input)
-        articles_title_block = tf.keras.layers.AveragePooling1D(2)(articles_title_block)
-        articles_title_block = tf.keras.layers.Conv1D(filters, 4, activation='relu')(articles_title_block)
+    def __create_articles_model(self, filters, title_size, content_size):
+        title_input = tf.keras.Input(shape=(title_size, NeuralWeightCalculator.__W2V_SIZE), name='articles_title')
+        title_block = tf.keras.layers.Conv1D(filters, 5, activation='relu')(title_input)
+        title_block = tf.keras.layers.AveragePooling1D(2)(title_block)
+        title_block = tf.keras.layers.Conv1D(filters, 4, activation='relu')(title_block)
 
-        articles_content_data_input = tf.keras.Input(shape=(articles_content_size, NeuralWeightCalculator.__W2V_SIZE), name='articles_content')
-        articles_content_block = tf.keras.layers.Conv1D(filters, 5, activation='relu')(articles_content_data_input)
-        articles_content_block = tf.keras.layers.AveragePooling1D(2)(articles_content_block)
-        articles_content_block = tf.keras.layers.Conv1D(filters, 5, activation='relu')(articles_content_block)
-        articles_content_block = tf.keras.layers.AveragePooling1D(2)(articles_content_block)
-        articles_content_block = tf.keras.layers.Conv1D(filters, 5, activation='relu')(articles_content_block)
-        articles_content_block = tf.keras.layers.AveragePooling1D(2)(articles_content_block)
-        articles_content_block = tf.keras.layers.Conv1D(filters, 5, activation='relu')(articles_content_block)
+        content_input = tf.keras.Input(shape=(content_size, NeuralWeightCalculator.__W2V_SIZE), name='articles_content')
+        content_block = tf.keras.layers.Conv1D(filters, 5, activation='relu')(content_input)
+        content_block = tf.keras.layers.AveragePooling1D(2)(content_block)
+        content_block = tf.keras.layers.Conv1D(filters, 5, activation='relu')(content_block)
+        content_block = tf.keras.layers.AveragePooling1D(2)(content_block)
+        content_block = tf.keras.layers.Conv1D(filters, 5, activation='relu')(content_block)
+        content_block = tf.keras.layers.AveragePooling1D(2)(content_block)
+        content_block = tf.keras.layers.Conv1D(filters, 5, activation='relu')(content_block)
 
-        x = tf.keras.layers.add([questions_block, articles_title_block, articles_content_block])
+        articles_block = tf.keras.layers.add([title_block, content_block], name='articles_output')
+        return tf.keras.Model([title_input, content_input], articles_block, name='articles_model')
+
+    def __create_distances_model(self, filters, questions_size, articles_title_size, articles_content_size):
+        questions_model = self.__create_questions_model(filters, questions_size)
+        articles_model = self.__create_articles_model(filters, articles_title_size, articles_content_size)
+
+        questions_input = tf.keras.Input(shape=(questions_size, NeuralWeightCalculator.__W2V_SIZE), name='questions')
+        articles_title_input = tf.keras.Input(shape=(articles_title_size, NeuralWeightCalculator.__W2V_SIZE), name='articles_title')
+        articles_content_input = tf.keras.Input(shape=(articles_content_size, NeuralWeightCalculator.__W2V_SIZE), name='articles_content')
+
+        x = tf.keras.layers.add([questions_model(questions_input), articles_model([articles_title_input, articles_content_input])])
         x = tf.keras.layers.Conv1D(filters, 2, activation='relu')(x)
         x = tf.keras.layers.Conv1D(filters, 2, activation='relu')(x)
         x = tf.keras.layers.Flatten()(x)
         x = tf.keras.layers.Dense(20, activation='sigmoid')(x)
         x = tf.keras.layers.Dense(1, activation='sigmoid', name='weight')(x)
+        return tf.keras.Model(inputs=[questions_input, articles_title_input, articles_content_input], outputs=x, name='distances_model')
 
-        model = tf.keras.Model(inputs=[questions_data_input, articles_title_data_input, articles_content_data_input], outputs=x, name='wiki_qa')
-        tf.keras.utils.plot_model(model, '%s/model.png' % self.__workdir, show_shapes=True)
+    def __create_model(self, questions_size, articles_title_size, articles_content_size):
+        model = self.__create_distances_model(20, questions_size, articles_title_size, articles_content_size)
+        tf.keras.utils.plot_model(model, '%s/model.png' % self.__workdir, show_shapes=True, expand_nested=True)
         return model
 
     def train(self, use_last_trained, epoch, train_data_percentage):
