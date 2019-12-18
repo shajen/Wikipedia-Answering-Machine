@@ -461,15 +461,25 @@ class NeuralWeightCalculator():
     def __upload(self, method_name, questions_articles_weight):
         method, created = Method.objects.get_or_create(name=method_name)
         logging.info('uploading model')
+        solutions = []
+        rates = []
         for question_id in questions_articles_weight:
             logging.debug(question_id)
-            ranking = sorted(questions_articles_weight[question_id].keys(), key=questions_articles_weight[question_id].get, reverse=True)
+            data = questions_articles_weight[question_id]
+            ranking = sorted(data.keys(), key=data.get, reverse=True)
             for answer in Answer.objects.filter(question_id=question_id):
                 try:
                     position = ranking.index(answer.article_id) + 1
+                    weight = data[answer.article_id]
                 except:
                     position = 10**9
-                Solution.objects.create(answer=answer, method=method, position=position)
+                    weight = 0.0
+                solutions.append(Solution(answer=answer, method=method, position=position))
+                rates.append(Rate(question_id=question_id, article_id=answer.article_id, method=method, weight=weight))
+            for article_id in ranking[:self.__debug_top_items]:
+                rates.append(Rate(question_id=question_id, article_id=article_id, method=method, weight=data[article_id]))
+        Solution.objects.bulk_create(solutions, ignore_conflicts=True)
+        Rate.objects.bulk_create(rates, ignore_conflicts=True)
 
     def test(self, method_name):
         logging.info('testing model')

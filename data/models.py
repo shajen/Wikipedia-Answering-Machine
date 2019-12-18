@@ -94,7 +94,7 @@ class Question(models.Model):
         words = list(map(lambda occurrence: occurrence[0], occurrences))
         words = Word.objects.filter(id__in=words, is_stop_word=False).values_list('id', flat=True)
         occurrences = list(filter(lambda occurrence: occurrence[0] in words, occurrences))
-        
+
         words = []
         for i in range(0, len(occurrences) - ngram + 1):
             current_occurrences = occurrences[i:i+ngram]
@@ -176,3 +176,10 @@ class QuestionOccurrence(models.Model):
 
     class Meta:
         unique_together = ('question', 'word')
+
+class Rate(models.Model):
+    question = models.ForeignKey(Question, on_delete=models.CASCADE)
+    article = models.ForeignKey(Article, on_delete=models.CASCADE)
+    method = models.ForeignKey(Method, on_delete=models.CASCADE)
+    weight = models.FloatField()
+    added_date = models.DateTimeField(auto_now_add=True)
