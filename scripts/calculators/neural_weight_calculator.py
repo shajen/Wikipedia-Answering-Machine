@@ -378,12 +378,12 @@ class NeuralWeightCalculator():
         i = 1
         total = len(chunks)
         for chunk_articles_id in chunks:
-            if not os.path.isfile('%s/articles/articles_content_chunk_%03d.npy' % (self.__workdir, i)) or not saved_data_ok:
+            if not os.path.isfile('%s/articles/articles_content_chunk_%04d.npy' % (self.__workdir, i)) or not saved_data_ok:
                 self.__load_data()
                 articles_title = self.__prepare_articles(chunk_articles_id, self.__articles_title_words, True, False)
-                self.__save_file('articles/articles_title_chunk_%03d' % i, articles_title)
+                self.__save_file('articles/articles_title_chunk_%04d' % i, articles_title)
                 articles_content = self.__prepare_articles(chunk_articles_id, self.__articles_content_words, False, False)
-                self.__save_file('articles/articles_content_chunk_%03d' % i, articles_content)
+                self.__save_file('articles/articles_content_chunk_%04d' % i, articles_content)
                 logging.debug("progress: %d/%d (%.2f %%)" % (i, total, i / total * 100))
             # else:
             #     logging.debug("chunk %d already exists, skipping" % i)
@@ -411,8 +411,8 @@ class NeuralWeightCalculator():
         article_counter = 0
         total = NeuralWeightCalculator.__ARTICLES_CHUNKS
         for i in range(1, NeuralWeightCalculator.__ARTICLES_CHUNKS + 1):
-            chunks_articles_title_data = self.__load_file('articles/articles_title_chunk_%03d' % i)
-            chunks_articles_content_data = self.__load_file('articles/articles_content_chunk_%03d' % i)
+            chunks_articles_title_data = self.__load_file('articles/articles_title_chunk_%04d' % i)
+            chunks_articles_content_data = self.__load_file('articles/articles_content_chunk_%04d' % i)
             chunks_articles_id = articles_id[article_counter:article_counter+chunks_articles_title_data.shape[0]]
             article_counter += chunks_articles_title_data.shape[0]
             self.__full_test_articles(articles_model, bypass_model, questions_id, questions_output, chunks_articles_id, chunks_articles_title_data, chunks_articles_content_data)
