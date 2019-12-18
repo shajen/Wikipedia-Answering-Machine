@@ -123,10 +123,11 @@ def start_neural(args, questions, method_name):
     logging.info("good_bad_ratio: %d" % args.neural_model_good_bad_ratio)
     logging.info("train_data_percentage: %.2f" % args.neural_model_train_data_percentage)
     logging.info("epoch: %d" % args.neural_model_epoch)
+    method_name = '%s, topn: %03d, type: neural' % (method_name, args.topn)
 
     neural_calculator = calculators.neural_weight_calculator.NeuralWeightCalculator(args.debug_top_items, args.word2vec_file, args.neural_model_work_directory, args.neural_model_questions_words_count, args.neural_model_articles_title_words_count, args.neural_model_articles_words_count, args.neural_model_good_bad_ratio, args.neural_model_train_data_percentage)
     neural_calculator.train(args.neural_model_epoch)
-    neural_calculator.test()
+    neural_calculator.test(method_name)
 
 def start(args, questions, method_name, neighbors, minimal_word_idf_weights, power_factors):
     logging.info('start')

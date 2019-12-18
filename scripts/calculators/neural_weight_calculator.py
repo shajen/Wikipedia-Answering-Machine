@@ -398,7 +398,7 @@ class NeuralWeightCalculator():
             #     logging.debug("chunk %d already exists, skipping" % i)
             i += 1
 
-    def __full_test_articles(self, articles_model, bypass_model, questions_id, questions_output, articles_id, articles_title, articles_content):
+    def __full_test_articles(self, questions_articles_weight, articles_model, bypass_model, questions_id, questions_output, articles_id, articles_title, articles_content):
         logging.debug("questions: %s, articles id: %s, title: %s, content: %s" % (str(questions_output.shape), str(articles_id.shape), str(articles_title.shape), str(articles_content.shape)))
         articles_output = articles_model.predict(
             { 'articles_title': articles_title, 'articles_content': articles_content },
@@ -410,8 +410,13 @@ class NeuralWeightCalculator():
             { 'questions': questions_output, 'articles': articles_output},
             batch_size=256,
             verbose=0)
+        i = 0
+        for article_id in articles_id:
+            for question_id in questions_id:
+                questions_articles_weight[question_id][article_id] = predictet_target[i]
+                i+=1
 
-    def __full_test(self, model, questions_model, articles_model, bypass_model):
+    def __full_test(self, questions_articles_weight, model, questions_model, articles_model, bypass_model):
         logging.info('full test')
         questions_id = self.__load_file('questions_id')
         questions_data = self.__load_file('questions_data')
@@ -424,7 +429,7 @@ class NeuralWeightCalculator():
             chunks_articles_content_data = self.__load_file('articles/articles_content_chunk_%04d' % i)
             chunks_articles_id = articles_id[article_counter:article_counter+chunks_articles_title_data.shape[0]]
             article_counter += chunks_articles_title_data.shape[0]
-            self.__full_test_articles(articles_model, bypass_model, questions_id, questions_output, chunks_articles_id, chunks_articles_title_data, chunks_articles_content_data)
+            self.__full_test_articles(questions_articles_weight, articles_model, bypass_model, questions_id, questions_output, chunks_articles_id, chunks_articles_title_data, chunks_articles_content_data)
             logging.debug("progress: %d/%d (%.2f %%)" % (i, total, i / total * 100))
 
     def __prepare_bypass_model(self, model, bypass_model):
@@ -453,7 +458,20 @@ class NeuralWeightCalculator():
         for i in model.outputs:
             logging.debug("    %s" % str(i.shape))
 
-    def test(self):
+    def __upload(self, method_name, questions_articles_weight):
+        method, created = Method.objects.get_or_create(name=method_name)
+        logging.info('uploading model')
+        for question_id in questions_articles_weight:
+            logging.debug(question_id)
+            ranking = sorted(questions_articles_weight[question_id].keys(), key=questions_articles_weight[question_id].get, reverse=True)
+            for answer in Answer.objects.filter(question_id=question_id):
+                try:
+                    position = ranking.index(answer.article_id) + 1
+                except:
+                    position = 10**9
+                Solution.objects.create(answer=answer, method=method, position=position)
+
+    def test(self, method_name):
         logging.info('testing model')
         self.__load_dataset()
 
@@ -465,8 +483,10 @@ class NeuralWeightCalculator():
         NeuralWeightCalculator.__print_model(questions_model)
         NeuralWeightCalculator.__print_model(articles_model)
         NeuralWeightCalculator.__print_model(bypass_model)
+        questions_articles_weight = defaultdict(defaultdict)
         self.__simple_test_model(model, 'test', self.__test_questions, self.__test_articles_title, self.__test_articles_content, self.__test_targets)
         self.__semi_test_model(model, 'test', self.__test_questions, self.__test_articles_title, self.__test_articles_content, self.__test_targets)
         self.__prepare_all_questions()
         self.__prepare_all_articles()
-        self.__full_test(model, questions_model, articles_model, bypass_model)
+        self.__full_test(questions_articles_weight, model, questions_model, articles_model, bypass_model)
+        self.__upload(method_name, questions_articles_weight)
