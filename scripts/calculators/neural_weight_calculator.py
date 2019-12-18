@@ -11,7 +11,7 @@ import tensorflow as tf
 
 class NeuralWeightCalculator():
     __W2V_SIZE = 100
-    __ARTICLES_CHUNKS = 10000
+    __ARTICLES_CHUNKS = 1000
 
     def __init__(self, debug_top_items, model_file, workdir, questions_words, articles_title_words, articles_content_words, good_bad_ratio, train_data_percentage):
         self.__debug_top_items = debug_top_items
@@ -189,12 +189,9 @@ class NeuralWeightCalculator():
         self.__save_file('test_articles_content', test_articles_content)
         self.__save_file('test_targets', test_target)
 
-    def __load_dataset(self):
+    def __only_load_dataset(self):
         if self.__dataset_loaded:
             return
-
-        if not os.path.isfile('%s/test_targets.npy' % self.__workdir):
-            self.__generate_dataset()
 
         self.__train_questions_id = self.__load_file('train_questions_id')
         self.__train_questions = self.__load_file('train_questions')
@@ -231,6 +228,13 @@ class NeuralWeightCalculator():
 
         self.__dataset_loaded = True
 
+    def __load_dataset(self):
+        try:
+            self.__only_load_dataset()
+        except:
+            self.__generate_dataset()
+            self.__only_load_dataset()
+            
     def __simple_test_model(self, model, dataset_name, questions, articles_title, articles_content, target):
         test_scores = model.evaluate(
             { 'questions': questions, 'articles_title': articles_title, 'articles_content': articles_content },
@@ -306,18 +310,22 @@ class NeuralWeightCalculator():
         tf.keras.utils.plot_model(model, '%s/model.png' % self.__workdir, show_shapes=True, expand_nested=True)
         return model
 
-    def train(self, use_last_trained, epoch):
+    def train(self, epoch):
+        if epoch == 0:
+            return
+
         logging.info('training model')
         self.__load_dataset()
 
-        if use_last_trained:
-            logging.info('use last trained model')
+        try:
             model = tf.keras.models.load_model('%s/model.h5' % self.__workdir)
+            logging.info('use last trained model')
             self.__simple_test_model(model, 'test', self.__test_questions, self.__test_articles_title, self.__test_articles_content, self.__test_targets)
             self.__semi_test_model(model, 'test', self.__test_questions, self.__test_articles_title, self.__test_articles_content, self.__test_targets)
-        else:
+        except:
             logging.info('create model')
             model = self.__create_model()
+
         logging.info('trainable weights: %s' % model.count_params())
 
         def on_epoch_end(current_epoch, data):
@@ -352,7 +360,7 @@ class NeuralWeightCalculator():
 
     def  __prepare_all_questions(self):
         logging.info('preparing questions')
-        questions_id = np.array(list(Question.objects.all().values_list('id', flat=True)))
+        questions_id = np.unique(self.__test_questions_id)
         if os.path.isfile('%s/questions_id.npy' % self.__workdir) and os.path.isfile('%s/questions_data.npy' % self.__workdir):
             saved_data_ok = np.array_equal(self.__load_file('questions_id'), questions_id)
         else:
