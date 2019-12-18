@@ -8,6 +8,7 @@ import numpy as np
 import os
 import sys
 import tensorflow as tf
+import re
 
 class NeuralWeightCalculator():
     __W2V_SIZE = 100
@@ -303,6 +304,13 @@ class NeuralWeightCalculator():
         tf.keras.utils.plot_model(model, '%s/model.png' % self.__workdir, show_shapes=True, expand_nested=True)
         return model
 
+    def __load_model(self):
+        models_files = [f for f in os.listdir(self.__workdir) if re.match(r'model_.*.h5', f)]
+        best_model_file = sorted(models_files)[-1]
+        logging.info('loading model from file: %s' % best_model_file)
+        model = tf.keras.models.load_model('%s/%s' % (self.__workdir, best_model_file))
+        return model
+
     def train(self, epoch):
         if epoch == 0:
             return
@@ -311,8 +319,7 @@ class NeuralWeightCalculator():
         self.__load_dataset()
 
         try:
-            model = tf.keras.models.load_model('%s/model.h5' % self.__workdir)
-            logging.info('use last trained model')
+            model = self.__load_model()
             self.__simple_test_model(model, 'test', self.__test_questions, self.__test_articles_title, self.__test_articles_content, self.__test_targets)
             self.__semi_test_model(model, 'test', self.__test_questions, self.__test_articles_title, self.__test_articles_content, self.__test_targets)
         except:
@@ -329,12 +336,12 @@ class NeuralWeightCalculator():
             except:
                 pass
 
-        save_callback = tf.keras.callbacks.ModelCheckpoint(filepath='%s/model.h5' % self.__workdir, save_best_only=True, monitor='val_accuracy', verbose=0)
+        save_callback = tf.keras.callbacks.ModelCheckpoint(filepath='%s/model_{val_accuracy:.4f}.h5' % self.__workdir, save_best_only=True, monitor='val_accuracy', verbose=0)
         test_callback = tf.keras.callbacks.LambdaCallback(on_epoch_end=on_epoch_end)
 
         model.compile(
             optimizer = tf.keras.optimizers.RMSprop(1e-3),
-            loss = tf.keras.losses.MeanSquaredError(),
+            loss = tf.keras.losses.BinaryCrossentropy(),
             loss_weights = [0.2],
             metrics = ['accuracy'])
         try:
@@ -450,7 +457,7 @@ class NeuralWeightCalculator():
         logging.info('testing model')
         self.__load_dataset()
 
-        model = tf.keras.models.load_model('%s/model.h5' % self.__workdir)
+        model = self.__load_model()
         (questions_model, articles_model) = self.__extract_models(model)
         bypass_model = self.__create_distances_model(NeuralWeightCalculator.__FILTERS, True)
         self.__prepare_bypass_model(model, bypass_model)
