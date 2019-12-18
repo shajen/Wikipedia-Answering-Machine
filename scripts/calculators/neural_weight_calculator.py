@@ -127,14 +127,13 @@ class NeuralWeightCalculator():
         logging.debug("data size: %s" % str(data.shape))
         return data
 
-    def __generate_dataset(self):
-        logging.info('start generating dataset')
-        self.__load_data()
+    def __generate_dataset_with_questions(self, questions, dataset_name):
+        logging.info('generating dataset: %s' % dataset_name)
 
-        questions = Question.objects.all()
+        logging.debug('questions: %d' % len(questions))
         questions_id = list(map(lambda q: [q.id] * q.answer_set.count(), questions))
         questions_id = list(reduce(lambda x, y: x + y, questions_id, []))
-        logging.debug('questions: %d' % len(questions_id))
+        logging.debug('answers: %d' % len(questions_id))
 
         good_articles_id = list(map(lambda q: list(map(lambda a: a.article_id, q.answer_set.all())), questions))
         good_articles_id = list(reduce(lambda x, y: x + y, good_articles_id, []))
@@ -143,51 +142,43 @@ class NeuralWeightCalculator():
         bad_articles_id = list(Article.objects.exclude(id__in=good_articles_id).order_by('?').values_list('id', flat=True)[:self.__good_bad_ratio * len(good_articles_id)])
         logging.debug('bad articles: %d' % len(bad_articles_id))
 
-        good_articles_title_data = self.__prepare_articles(good_articles_id, self.__articles_title_words, True, True)
-        good_articles_content_data = self.__prepare_articles(good_articles_id, self.__articles_content_words, False, True)
-        bad_articles_title_data = self.__prepare_articles(bad_articles_id, self.__articles_title_words, True, True)
-        bad_articles_content_data = self.__prepare_articles(bad_articles_id, self.__articles_content_words, False, True)
-        good_questions_data = self.__prepare_questions(questions_id, self.__questions_words)
-        good_target = np.array([1.0] * good_questions_data.shape[0])
-        bad_questions_data = np.repeat(good_questions_data, self.__good_bad_ratio, axis=0)
-        bad_target = np.array([0.0] * bad_questions_data.shape[0])
         articles_id = np.concatenate((np.array(good_articles_id), np.array(bad_articles_id)))
+        logging.debug('total articles: %d' % len(bad_articles_id))
+
         questions_id = np.repeat(np.array([questions_id]), self.__good_bad_ratio + 1, axis=0).reshape(-1)
+        logging.debug('total questions: %d' % len(questions_id))
 
-        order = np.random.permutation(good_questions_data.shape[0] + bad_questions_data.shape[0])
-        questions = np.concatenate((good_questions_data, bad_questions_data))[order]
-        articles_title = np.concatenate((good_articles_title_data, bad_articles_title_data))[order]
-        articles_content = np.concatenate((good_articles_content_data, bad_articles_content_data))[order]
-        target = np.concatenate((good_target, bad_target))[order]
+        articles_title = self.__prepare_articles(articles_id, self.__articles_title_words, True, True)
+        articles_content = self.__prepare_articles(articles_id, self.__articles_content_words, False, True)
+        questions = self.__prepare_questions(questions_id, self.__questions_words)
+        targets = np.array([1.0] * len(good_articles_id) + [0.0] * len(bad_articles_id))
 
-        split_index = int(questions.shape[0] * self.__train_data_percentage)
-        train_questions_id = questions_id[:split_index]
+        order = np.random.permutation(articles_id.shape[0])
+        questions_id = questions_id[order]
+        questions = questions[order]
+        articles_id = articles_id[order]
+        articles_title = articles_title[order]
+        articles_content = articles_content[order]
+        targets = targets[order]
+
+        self.__save_file('%s_questions_id' % dataset_name, questions_id)
+        self.__save_file('%s_questions' % dataset_name, questions)
+        self.__save_file('%s_articles_id' % dataset_name, articles_id)
+        self.__save_file('%s_articles_title' % dataset_name, articles_title)
+        self.__save_file('%s_articles_content' % dataset_name, articles_content)
+        self.__save_file('%s_targets' % dataset_name, targets)
+
+    def __generate_dataset(self):
+        logging.info('start generating dataset')
+        self.__load_data()
+
+        questions = list(np.random.permutation(Question.objects.all()))
+        split_index = int(len(questions) * self.__train_data_percentage)
         train_questions = questions[:split_index]
-        train_articles_id = articles_id[:split_index]
-        train_articles_title = articles_title[:split_index]
-        train_articles_content = articles_content[:split_index]
-        train_target = target[:split_index]
-
-        test_questions_id = questions_id[split_index:]
         test_questions = questions[split_index:]
-        test_articles_id = articles_id[split_index:]
-        test_articles_title = articles_title[split_index:]
-        test_articles_content = articles_content[split_index:]
-        test_target = target[split_index:]
 
-        self.__save_file('train_questions_id', train_questions_id)
-        self.__save_file('train_questions', train_questions)
-        self.__save_file('train_articles_id', train_articles_id)
-        self.__save_file('train_articles_title', train_articles_title)
-        self.__save_file('train_articles_content', train_articles_content)
-        self.__save_file('train_targets', train_target)
-
-        self.__save_file('test_questions_id', test_questions_id)
-        self.__save_file('test_questions', test_questions)
-        self.__save_file('test_articles_id', test_articles_id)
-        self.__save_file('test_articles_title', test_articles_title)
-        self.__save_file('test_articles_content', test_articles_content)
-        self.__save_file('test_targets', test_target)
+        self.__generate_dataset_with_questions(train_questions, 'train')
+        self.__generate_dataset_with_questions(test_questions, 'test')
 
     def __only_load_dataset(self):
         if self.__dataset_loaded:
@@ -234,7 +225,7 @@ class NeuralWeightCalculator():
         except:
             self.__generate_dataset()
             self.__only_load_dataset()
-            
+
     def __simple_test_model(self, model, dataset_name, questions, articles_title, articles_content, target):
         test_scores = model.evaluate(
             { 'questions': questions, 'articles_title': articles_title, 'articles_content': articles_content },
