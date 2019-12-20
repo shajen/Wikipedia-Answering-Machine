@@ -12,7 +12,7 @@ import re
 
 class NeuralWeightCalculator():
     __W2V_SIZE = 100
-    __ARTICLES_CHUNKS = 1000
+    __ARTICLES_CHUNKS = 100
     __FILTERS = 6
 
     def __init__(self, debug_top_items, model_file, workdir, questions_words, articles_title_words, articles_content_words, good_bad_ratio, train_data_percentage):
