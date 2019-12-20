@@ -398,39 +398,57 @@ class NeuralWeightCalculator():
             #     logging.debug("chunk %d already exists, skipping" % i)
             i += 1
 
-    def __full_test_articles(self, questions_articles_weight, articles_model, bypass_model, questions_id, questions_output, articles_id, articles_title, articles_content):
-        logging.debug("questions: %s, articles id: %s, title: %s, content: %s" % (str(questions_output.shape), str(articles_id.shape), str(articles_title.shape), str(articles_content.shape)))
-        articles_output = articles_model.predict(
-            { 'articles_title': articles_title, 'articles_content': articles_content },
-            batch_size=256,
-            verbose=0)
-        articles_output = np.repeat(articles_output, questions_id.shape[0], 0)
-        questions_output = np.repeat([questions_output], articles_id.shape[0], 0).reshape(-1, questions_output.shape[1])
-        predictet_target = bypass_model.predict(
-            { 'questions': questions_output, 'articles': articles_output},
-            batch_size=256,
-            verbose=0)
-        i = 0
-        for article_id in articles_id:
-            for question_id in questions_id:
-                questions_articles_weight[question_id][article_id] = predictet_target[i]
-                i+=1
+    def __upload(self, method, question_id, articles_id, articles_weight):
+        order = np.argsort(articles_weight)[::-1]
+        articles_id = articles_id[order]
+        articles_weight = articles_weight[order]
+        solutions = []
+        rates = []
+        for answer in Answer.objects.filter(question_id=question_id):
+            try:
+                position = np.where(articles_id==answer.article_id)[0][0]
+                weight = articles_weight[position]
+            except:
+                position = 10**9
+                weight = 0.0
+            solutions.append(Solution(answer=answer, method=method, position=position))
+            rates.append(Rate(question_id=question_id, article_id=answer.article_id, method=method, weight=weight))
+        for i in range(0, min(self.__debug_top_items, articles_id.shape[0])):
+            rates.append(Rate(question_id=question_id, article_id=articles_id[i], method=method, weight=articles_weight[i]))
+        Solution.objects.bulk_create(solutions, ignore_conflicts=True)
+        Rate.objects.bulk_create(rates, ignore_conflicts=True)
 
-    def __full_test(self, questions_articles_weight, model, questions_model, articles_model, bypass_model):
+    def __full_test_article(self, method, bypass_model, question_id, question_data, articles_id, articles_data):
+        questions_data = np.repeat([question_data], articles_data.shape[0], 0)
+        logging.info(questions_data.shape)
+        logging.info(articles_data.shape)
+        articles_weight = bypass_model.predict(
+            { 'questions': questions_data, 'articles': articles_data},
+            batch_size=256,
+            verbose=0).reshape(-1)
+        self.__upload(method, question_id, articles_id, articles_weight)
+
+    def __full_test(self, method, questions_articles_weight, model, questions_model, articles_model, bypass_model):
         logging.info('full test')
         questions_id = self.__load_file('questions_id')
         questions_data = self.__load_file('questions_data')
         questions_output = predictet_target = questions_model.predict(questions_data, batch_size=64, verbose=0)
         articles_id = self.__load_file('articles/articles_id')
-        article_counter = 0
+        articles_output = np.zeros(shape=(0, articles_model.output_shape[1]))
         total = NeuralWeightCalculator.__ARTICLES_CHUNKS
         for i in range(1, NeuralWeightCalculator.__ARTICLES_CHUNKS + 1):
-            chunks_articles_title_data = self.__load_file('articles/articles_title_chunk_%04d' % i)
-            chunks_articles_content_data = self.__load_file('articles/articles_content_chunk_%04d' % i)
-            chunks_articles_id = articles_id[article_counter:article_counter+chunks_articles_title_data.shape[0]]
-            article_counter += chunks_articles_title_data.shape[0]
-            self.__full_test_articles(questions_articles_weight, articles_model, bypass_model, questions_id, questions_output, chunks_articles_id, chunks_articles_title_data, chunks_articles_content_data)
-            logging.debug("progress: %d/%d (%.2f %%)" % (i, total, i / total * 100))
+            chunks_articles_title = self.__load_file('articles/articles_title_chunk_%04d' % i)
+            chunks_articles_content = self.__load_file('articles/articles_content_chunk_%04d' % i)
+            chunks_articles_output = articles_model.predict({ 'articles_title': chunks_articles_title, 'articles_content': chunks_articles_content }, batch_size=256, verbose=0)
+            articles_output = np.concatenate((articles_output, chunks_articles_output), axis=0)
+            logging.debug("articles progress: %d/%d (%.2f %%)" % (i, total, i / total * 100))
+        logging.debug('articles output: %s' % str(articles_output.shape))
+        logging.debug('questions output: %s' % str(questions_output.shape))
+
+        total = len(questions_id)
+        for i in range(0, total):
+            self.__full_test_article(method, bypass_model, questions_id[i], questions_output[i], articles_id, articles_output)
+            logging.debug("questions progress: %d/%d (%.2f %%)" % (i, total, i / total * 100))
 
     def __prepare_bypass_model(self, model, bypass_model):
         for l1 in model.layers:
@@ -458,31 +476,9 @@ class NeuralWeightCalculator():
         for i in model.outputs:
             logging.debug("    %s" % str(i.shape))
 
-    def __upload(self, method_name, questions_articles_weight):
-        method, created = Method.objects.get_or_create(name=method_name)
-        logging.info('uploading model')
-        solutions = []
-        rates = []
-        for question_id in questions_articles_weight:
-            logging.debug(question_id)
-            data = questions_articles_weight[question_id]
-            ranking = sorted(data.keys(), key=data.get, reverse=True)
-            for answer in Answer.objects.filter(question_id=question_id):
-                try:
-                    position = ranking.index(answer.article_id) + 1
-                    weight = data[answer.article_id]
-                except:
-                    position = 10**9
-                    weight = 0.0
-                solutions.append(Solution(answer=answer, method=method, position=position))
-                rates.append(Rate(question_id=question_id, article_id=answer.article_id, method=method, weight=weight))
-            for article_id in ranking[:self.__debug_top_items]:
-                rates.append(Rate(question_id=question_id, article_id=article_id, method=method, weight=data[article_id]))
-        Solution.objects.bulk_create(solutions, ignore_conflicts=True)
-        Rate.objects.bulk_create(rates, ignore_conflicts=True)
-
     def test(self, method_name):
         logging.info('testing model')
+        method, created = Method.objects.get_or_create(name=method_name)
         self.__load_dataset()
 
         model = self.__load_model()
@@ -498,5 +494,4 @@ class NeuralWeightCalculator():
         self.__semi_test_model(model, 'test', self.__test_questions, self.__test_articles_title, self.__test_articles_content, self.__test_targets)
         self.__prepare_all_questions()
         self.__prepare_all_articles()
-        self.__full_test(questions_articles_weight, model, questions_model, articles_model, bypass_model)
-        self.__upload(method_name, questions_articles_weight)
+        self.__full_test(method, questions_articles_weight, model, questions_model, articles_model, bypass_model)

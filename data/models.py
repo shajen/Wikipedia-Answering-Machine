@@ -183,3 +183,6 @@ class Rate(models.Model):
     method = models.ForeignKey(Method, on_delete=models.CASCADE)
     weight = models.FloatField()
     added_date = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('question', 'article', 'method')
