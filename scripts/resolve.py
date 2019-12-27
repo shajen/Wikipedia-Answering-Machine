@@ -50,7 +50,7 @@ def resolve_questions_tf_idf(args, questions_queue, method_name, neighbors, mini
                     comparators = list(filter(lambda comparator: not comparator.has_already_solutions(question), comparators))
                     if comparators:
                         if not prepared:
-                            tf_idf_calculator.prepare(question, args.is_title)
+                            tf_idf_calculator.prepare(question, args.title)
                             prepared = True
                         tf_idf_calculator.calculate(question, neighbor, minimal_word_idf_weight, comparators)
                 # links_wc.upload_positions(q, method, articles_weight)
@@ -89,7 +89,7 @@ def resolve_questions_word2vec(args, questions_queue, method_name):
         try:
             question = questions_queue.get(timeout=1)
             if not word2vec_calculator.has_already_solutions(question, method_name):
-                word2vec_calculator.calculate(question, method_name, args.is_title, args.topn)
+                word2vec_calculator.calculate(question, method_name, args.title, args.topn)
         except queue.Empty:
             break
 
