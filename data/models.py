@@ -81,6 +81,8 @@ class Method(models.Model):
 
 class Question(models.Model):
     name = models.TextField(max_length=1024)
+    words = models.TextField(default='')
+    words_count = models.PositiveIntegerField(default=0)
     added_date = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
