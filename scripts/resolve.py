@@ -16,6 +16,7 @@ sys.path.append(os.path.dirname(__file__))
 import calculators.categories_weight_calculator
 import calculators.links_weight_calculator
 import calculators.neural_weight_calculator
+import calculators.deep_averaging_neural_weight_calculator
 import calculators.tf_idf_weight_calculator
 import calculators.weight_comparator
 import calculators.word2vec_weight_calculator
@@ -126,6 +127,10 @@ def start_neural(args, questions, method_name):
     method_name = '%s, topn: %03d, type: neural' % (method_name, args.topn)
 
     neural_calculator = calculators.neural_weight_calculator.NeuralWeightCalculator(args.debug_top_items, args.word2vec_file, args.neural_model_work_directory, args.neural_model_questions_words_count, args.neural_model_articles_title_words_count, args.neural_model_articles_words_count, args.neural_model_good_bad_ratio, args.neural_model_train_data_percentage)
+    neural_calculator.train(args.neural_model_epoch)
+    neural_calculator.test(method_name)
+
+    neural_calculator = calculators.deep_averaging_neural_weight_calculator.DeepAveragingNeuralWeightCalculator(args.debug_top_items, args.word2vec_file, args.neural_model_work_directory, args.neural_model_questions_words_count, args.neural_model_articles_title_words_count, args.neural_model_articles_words_count, args.neural_model_good_bad_ratio, args.neural_model_train_data_percentage)
     neural_calculator.train(args.neural_model_epoch)
     neural_calculator.test(method_name)
 

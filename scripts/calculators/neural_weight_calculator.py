@@ -11,7 +11,7 @@ import tensorflow as tf
 import re
 
 class NeuralWeightCalculator():
-    __W2V_SIZE = 100
+    _W2V_SIZE = 100
     __ARTICLES_CHUNKS = 100
     __FILTERS = 6
 
@@ -60,7 +60,7 @@ class NeuralWeightCalculator():
         if word in self.__word_id_to_vector:
             return self.__word_id_to_vector[word]
         else:
-            return np.array([0.0] * NeuralWeightCalculator.__W2V_SIZE)
+            return np.array([0.0] * NeuralWeightCalculator._W2V_SIZE)
 
     def __words2vec(self, words):
         return list(map(lambda word: self.__word2vec(word), words))
@@ -248,7 +248,7 @@ class NeuralWeightCalculator():
         r2 = self.__colored('%.2f %%' % (corrected_count / total_count * 100), 'yellow')
         logging.info("semi test, dataset: %s, corrected: %s (%s)" % (dataset_name, r1, r2))
 
-    def __words_layers(self, filters, input):
+    def _words_layers(self, filters, input):
         blocks = []
         input = tf.keras.layers.Conv1D(filters, 1, activation='relu')(input)
         for i in [2, 3, 4, 5]:
@@ -262,50 +262,53 @@ class NeuralWeightCalculator():
         block = tf.keras.layers.GlobalMaxPooling1D()(block)
 
     def __create_questions_model(self, filters):
-        input = tf.keras.Input(shape=(self.__questions_words, NeuralWeightCalculator.__W2V_SIZE), name='questions')
-        block = self.__words_layers(filters, input)
+        input = tf.keras.Input(shape=(self.__questions_words, NeuralWeightCalculator._W2V_SIZE), name='questions')
+        block = self._words_layers(filters, input)
         return tf.keras.Model(input, block, name='questions_model')
 
     def __create_articles_model(self, filters):
-        title_input = tf.keras.Input(shape=(self.__articles_title_words, NeuralWeightCalculator.__W2V_SIZE), name='articles_title')
-        title_block = self.__words_layers(filters, title_input)
+        title_input = tf.keras.Input(shape=(self.__articles_title_words, NeuralWeightCalculator._W2V_SIZE), name='articles_title')
+        title_block = self._words_layers(filters, title_input)
 
-        content_input = tf.keras.Input(shape=(self.__articles_content_words, NeuralWeightCalculator.__W2V_SIZE), name='articles_content')
-        content_block = self.__words_layers(filters, content_input)
+        content_input = tf.keras.Input(shape=(self.__articles_content_words, NeuralWeightCalculator._W2V_SIZE), name='articles_content')
+        content_block = self._words_layers(filters, content_input)
 
         articles_block = tf.keras.layers.concatenate([title_block, content_block], name='articles_output')
         return tf.keras.Model([title_input, content_input], articles_block, name='articles_model')
+
+    def _weight_layers(self, x):
+        x = tf.keras.layers.Dense(32, activation='sigmoid')(x)
+        x = tf.keras.layers.Dense(16, activation='sigmoid')(x)
+        x = tf.keras.layers.Dense(1, activation='sigmoid', name='weight')(x)
+        return x
 
     def __create_distances_model(self, filters, bypass_models):
         questions_model = self.__create_questions_model(filters)
         articles_model = self.__create_articles_model(filters)
 
-        def add_layers(x):
-            x = tf.keras.layers.Dense(32, activation='sigmoid')(x)
-            x = tf.keras.layers.Dense(16, activation='sigmoid')(x)
-            x = tf.keras.layers.Dense(1, activation='sigmoid', name='weight')(x)
-            return x
-
         if not bypass_models:
-            questions_input = tf.keras.Input(shape=(self.__questions_words, NeuralWeightCalculator.__W2V_SIZE), name='questions')
-            articles_title_input = tf.keras.Input(shape=(self.__articles_title_words, NeuralWeightCalculator.__W2V_SIZE), name='articles_title')
-            articles_content_input = tf.keras.Input(shape=(self.__articles_content_words, NeuralWeightCalculator.__W2V_SIZE), name='articles_content')
+            questions_input = tf.keras.Input(shape=(self.__questions_words, NeuralWeightCalculator._W2V_SIZE), name='questions')
+            articles_title_input = tf.keras.Input(shape=(self.__articles_title_words, NeuralWeightCalculator._W2V_SIZE), name='articles_title')
+            articles_content_input = tf.keras.Input(shape=(self.__articles_content_words, NeuralWeightCalculator._W2V_SIZE), name='articles_content')
 
             x = tf.keras.layers.concatenate([questions_model(questions_input), articles_model([articles_title_input, articles_content_input])])
-            return tf.keras.Model(inputs=[questions_input, articles_title_input, articles_content_input], outputs=add_layers(x), name='distances_model')
+            return tf.keras.Model(inputs=[questions_input, articles_title_input, articles_content_input], outputs=self._weight_layers(x), name='distances_model')
         else:
             questions_input = tf.keras.Input(shape=questions_model.output.shape[1:], name='questions')
             articles_input = tf.keras.Input(shape=articles_model.output.shape[1:], name='articles')
             x = tf.keras.layers.concatenate([questions_input, articles_input])
-            return tf.keras.Model(inputs=[questions_input, articles_input], outputs=add_layers(x), name='distances_model')
+            return tf.keras.Model(inputs=[questions_input, articles_input], outputs=self._weight_layers(x), name='distances_model')
 
     def __create_model(self):
         model = self.__create_distances_model(NeuralWeightCalculator.__FILTERS, False)
-        tf.keras.utils.plot_model(model, '%s/model.png' % self.__workdir, show_shapes=True, expand_nested=True)
+        tf.keras.utils.plot_model(model, '%s/%s.png' % (self.__workdir, self._model_name()), show_shapes=True, expand_nested=True)
         return model
 
+    def _model_name(self):
+        return 'model'
+
     def __load_model(self):
-        models_files = [f for f in os.listdir(self.__workdir) if re.match(r'model_.*.h5', f)]
+        models_files = [f for f in os.listdir(self.__workdir) if re.match(r'%s_.*.h5' % self._model_name(), f)]
         best_model_file = sorted(models_files)[-1]
         logging.info('loading model from file: %s' % best_model_file)
         model = tf.keras.models.load_model('%s/%s' % (self.__workdir, best_model_file))
@@ -336,7 +339,7 @@ class NeuralWeightCalculator():
             except:
                 pass
 
-        save_callback = tf.keras.callbacks.ModelCheckpoint(filepath='%s/model_{val_accuracy:.4f}.h5' % self.__workdir, save_best_only=True, monitor='val_accuracy', verbose=0)
+        save_callback = tf.keras.callbacks.ModelCheckpoint(filepath='%s/%s_{val_accuracy:.4f}.h5' % (self.__workdir, self._model_name()), save_best_only=True, monitor='val_accuracy', verbose=0)
         test_callback = tf.keras.callbacks.LambdaCallback(on_epoch_end=on_epoch_end)
 
         model.compile(
@@ -492,6 +495,6 @@ class NeuralWeightCalculator():
         questions_articles_weight = defaultdict(defaultdict)
         self.__simple_test_model(model, 'test', self.__test_questions, self.__test_articles_title, self.__test_articles_content, self.__test_targets)
         self.__semi_test_model(model, 'test', self.__test_questions, self.__test_articles_title, self.__test_articles_content, self.__test_targets)
-        self.__prepare_all_questions()
-        self.__prepare_all_articles()
-        self.__full_test(method, questions_articles_weight, model, questions_model, articles_model, bypass_model)
+        # self.__prepare_all_questions()
+        # self.__prepare_all_articles()
+        # self.__full_test(method, questions_articles_weight, model, questions_model, articles_model, bypass_model)
