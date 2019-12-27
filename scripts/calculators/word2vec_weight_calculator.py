@@ -16,6 +16,23 @@ class Word2VecWeightCalculator():
         self.__stop_words = set(Word.objects.filter(is_stop_word=True).values_list('id', flat=True))
         logging.info('stop words: %d' % len(self.__stop_words))
 
+        logging.info('loading articles words')
+        self.__content_articles_words = {}
+        self.__title_articles_words = {}
+        for (article_id, content_words, title_words) in Article.objects.values_list('id', 'content_words', 'title_words'):
+            logging.debug('article: %d' % article_id)
+            content_words = content_words.split(',')
+            content_words = list(filter(lambda w: w != '', content_words))
+            content_words = list(map(lambda w: int(w), content_words))
+            content_words = list(filter(lambda w: w not in self.__stop_words, content_words))
+            self.__content_articles_words[article_id] = set(content_words)
+
+            title_words = title_words.split(',')
+            title_words = list(filter(lambda w: w != '', title_words))
+            title_words = list(map(lambda w: int(w), title_words))
+            title_words = list(filter(lambda w: w not in self.__stop_words, title_words))
+            self.__title_articles_words[article_id] = set(title_words)
+
     def __get_similar_words_id(self, ids, topn):
         similar_words = []
         for word in Word.objects.filter(id__in=ids).values_list('value', flat=True):
@@ -50,12 +67,24 @@ class Word2VecWeightCalculator():
             return np.zeros(100)
 
     def __get_question_words_id(self, question):
-        return list(QuestionOccurrence.objects.filter(question_id=question.id).values_list('word_id', flat=True))
+        words = question.words.split(',')
+        words = list(filter(lambda w: w != '', words))
+        words = list(map(lambda w: int(w), words))
+        return words
 
     def __get_articles_words_id(self, words_id, is_title):
-        articles_words_id = defaultdict(list)
-        for (article_id, word_id) in ArticleOccurrence.objects.filter(is_title=is_title, word_id__in=words_id).values_list('article_id', 'word_id'):
-            articles_words_id[article_id].append(word_id)
+        articles_words_id = {}
+        words_id = set(words_id)
+        if is_title:
+            for article_id in self.__title_articles_words:
+                words = words_id.intersection(self.__title_articles_words[article_id])
+                if words:
+                    articles_words_id[article_id] = words
+        else:
+            for article_id in self.__content_articles_words:
+                words = words_id.intersection(self.__content_articles_words[article_id])
+                if words:
+                    articles_words_id[article_id] = words
         return articles_words_id
 
     def __load_words_id_vectors(self, ids):
@@ -82,19 +111,26 @@ class Word2VecWeightCalculator():
         question_words_id = self.__words_id_to_words_base_forms_id(question_words_id)
         logging.info('words base forms count: %d' % len(set(question_words_id)))
 
-        similar_words_id = self.__get_similar_words_id(question_words_id, topn)
-        logging.info('similar words count: %d' % len(set(similar_words_id)))
+        if topn >= 999:
+            if is_title:
+                articles_words_id = self.__title_articles_words
+            else:
+                articles_words_id = self.__content_articles_words
+        else:
+            similar_words_id = self.__get_similar_words_id(question_words_id, topn)
+            logging.info('similar words count: %d' % len(set(similar_words_id)))
 
-        similar_words_id = self.__get_words_changed_forms_id(similar_words_id)
-        logging.info('changed form similar words count: %d' % len(set(similar_words_id)))
+            similar_words_id = self.__get_words_changed_forms_id(similar_words_id)
+            logging.info('changed form similar words count: %d' % len(set(similar_words_id)))
 
-        self.__load_words_id_vectors(similar_words_id)
-        logging.info('words vectors: %d' % len(set(self.__word_id_to_vector)))
-        self.__load_words_id_base_form_id(similar_words_id)
-        logging.info('words base forms: %d' % len(set(self.__word_id_to_word_base_form_id)))
+            self.__load_words_id_vectors(similar_words_id)
+            logging.info('words vectors: %d' % len(set(self.__word_id_to_vector)))
+            self.__load_words_id_base_form_id(similar_words_id)
+            logging.info('words base forms: %d' % len(set(self.__word_id_to_word_base_form_id)))
 
-        logging.info('reading articles')
-        articles_words_id = self.__get_articles_words_id(similar_words_id, is_title)
+            logging.info('reading articles')
+            articles_words_id = self.__get_articles_words_id(similar_words_id, is_title)
+
         articles_id = []
         articles_data = []
         logging.info('preparing articles data')
@@ -153,5 +189,6 @@ class Word2VecWeightCalculator():
         logging.info('calculating')
         method, created = Method.objects.get_or_create(name=method_name)
         (question_data, articles_id, articles_data) = self.__prepare_data(question, is_title, topn)
-        distances = self.__calculate_distances(question_data, articles_data)
-        self.__upload_positions(question, articles_id, distances, method)
+        if articles_data.size:
+            distances = self.__calculate_distances(question_data, articles_data)
+            self.__upload_positions(question, articles_id, distances, method)
