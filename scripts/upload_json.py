@@ -188,6 +188,39 @@ def update_articles_words_count(is_title):
             logging.warning(article)
     logging.info('finished update_articles_words_count')
 
+def update_articles_words(is_title, chunk_size):
+    logging.info('start update_articles_words is_title: %d' % is_title)
+    current = 0
+    total = Article.objects.count() / chunk_size
+
+    def update(articles):
+        if is_title:
+            Article.objects.bulk_update(articles, ['title_words'])
+        else:
+            Article.objects.bulk_update(articles, ['content_words'])
+
+    articles = []
+    for article in Article.objects.order_by('id').iterator():
+        words = []
+        for (word_id, positions) in ArticleOccurrence.objects.filter(article_id=article.id, is_title=is_title).values_list('word_id', 'positions').iterator():
+            for position in positions.split(','):
+                try:
+                    words.append((int(position), word_id))
+                except:
+                    pass
+        words = ','.join(list(map(lambda x: str(x[1]), sorted(words))))
+        if is_title:
+            article.title_words = words
+        else:
+            article.content_words = words
+        articles.append(article)
+        if len(articles) >= chunk_size:
+            update(articles)
+            articles = []
+            current += 1
+            logging.debug("progress: %d/%d (%.2f %%)" % (current, total, current / total * 100))
+    update(articles)
+
 def run(*args):
     try:
         args = shlex.split(args[0])
@@ -224,5 +257,7 @@ def run(*args):
     preparse_articles(args.batch_size, args.json_articles_file, category_tag, first_n_lines, pool)
     parse_articles(args.batch_size, args.json_articles_file, category_tag, redirect_tag, first_n_lines, pool)
     parse_stop_words(args.stop_words_file, first_n_lines)
+    update_articles_words(True, 1000)
     update_articles_words_count(True)
+    update_articles_words(False, 1000)
     update_articles_words_count(False)

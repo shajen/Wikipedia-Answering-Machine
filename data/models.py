@@ -63,7 +63,9 @@ class Article(models.Model):
         on_delete=models.CASCADE
     )
     categories = models.ManyToManyField(Category)
+    content_words = models.TextField(default='')
     content_words_count = models.PositiveIntegerField(default=0)
+    title_words = models.TextField(default='')
     title_words_count = models.PositiveIntegerField(default=0)
     added_date = models.DateTimeField(auto_now_add=True)
 
