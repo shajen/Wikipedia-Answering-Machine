@@ -7,16 +7,10 @@ import logging
 import numpy as np
 import scipy.spatial
 
-class Word2VecWeightCalculator():
-    def __init__(self, debug_top_items, model_file):
-        self.__debug_top_items = debug_top_items
-        logging.info('loading word2vec model')
-        self.__word2vec_model = gensim.models.KeyedVectors.load(model_file)
-        logging.info('start reading stop words')
-        self.__stop_words = set(Word.objects.filter(is_stop_word=True).values_list('id', flat=True))
-        logging.info('stop words: %d' % len(self.__stop_words))
-
+class ArticlesData():
+    def __init__(self):
         logging.info('loading articles words')
+        stop_words = set(Word.objects.filter(is_stop_word=True).values_list('id', flat=True))
         self.__content_articles_words = {}
         self.__title_articles_words = {}
         for (article_id, content_words, title_words) in Article.objects.values_list('id', 'content_words', 'title_words'):
@@ -24,14 +18,42 @@ class Word2VecWeightCalculator():
             content_words = content_words.split(',')
             content_words = list(filter(lambda w: w != '', content_words))
             content_words = list(map(lambda w: int(w), content_words))
-            content_words = list(filter(lambda w: w not in self.__stop_words, content_words))
+            content_words = list(filter(lambda w: w not in stop_words, content_words))
             self.__content_articles_words[article_id] = set(content_words)
 
             title_words = title_words.split(',')
             title_words = list(filter(lambda w: w != '', title_words))
             title_words = list(map(lambda w: int(w), title_words))
-            title_words = list(filter(lambda w: w not in self.__stop_words, title_words))
+            title_words = list(filter(lambda w: w not in stop_words, title_words))
             self.__title_articles_words[article_id] = set(title_words)
+
+    def get_article_words_id(self, article_id, words_id, is_title):
+        if is_title:
+            words = self.__title_articles_words[article_id]
+            if words_id != set():
+                return words_id.intersection(words)
+            else:
+                return words
+        else:
+            words = self.__content_articles_words[article_id]
+            if words_id != set():
+                return words_id.intersection(words)
+            else:
+                return words
+    def get_articles_id(self):
+        return self.__content_articles_words.keys()
+
+class Word2VecWeightCalculator():
+    def load_word2vec_model(word2vec_file):
+        return gensim.models.KeyedVectors.load(word2vec_file)
+
+    def __init__(self, debug_top_items, word2vec_model, articles_data):
+        self.__debug_top_items = debug_top_items
+        logging.info('start reading stop words')
+        self.__stop_words = set(Word.objects.filter(is_stop_word=True).values_list('id', flat=True))
+        logging.info('stop words: %d' % len(self.__stop_words))
+        self.__word2vec_model = word2vec_model
+        self.__articles_data = articles_data
 
     def __get_similar_words_id(self, ids, topn):
         similar_words = []
@@ -72,21 +94,6 @@ class Word2VecWeightCalculator():
         words = list(map(lambda w: int(w), words))
         return words
 
-    def __get_articles_words_id(self, words_id, is_title):
-        articles_words_id = {}
-        words_id = set(words_id)
-        if is_title:
-            for article_id in self.__title_articles_words:
-                words = words_id.intersection(self.__title_articles_words[article_id])
-                if words:
-                    articles_words_id[article_id] = words
-        else:
-            for article_id in self.__content_articles_words:
-                words = words_id.intersection(self.__content_articles_words[article_id])
-                if words:
-                    articles_words_id[article_id] = words
-        return articles_words_id
-
     def __load_words_id_vectors(self, ids):
         self.__word_id_to_vector = {}
         for (id, word) in Word.objects.filter(is_stop_word=False).filter(id__in=ids).values_list('id', 'value'):
@@ -112,10 +119,7 @@ class Word2VecWeightCalculator():
         logging.info('words base forms count: %d' % len(set(question_words_id)))
 
         if topn >= 999:
-            if is_title:
-                articles_words_id = self.__title_articles_words
-            else:
-                articles_words_id = self.__content_articles_words
+            similar_words_id = []
         else:
             similar_words_id = self.__get_similar_words_id(question_words_id, topn)
             logging.info('similar words count: %d' % len(set(similar_words_id)))
@@ -128,15 +132,13 @@ class Word2VecWeightCalculator():
             self.__load_words_id_base_form_id(similar_words_id)
             logging.info('words base forms: %d' % len(set(self.__word_id_to_word_base_form_id)))
 
-            logging.info('reading articles')
-            articles_words_id = self.__get_articles_words_id(similar_words_id, is_title)
-
         articles_id = []
         articles_data = []
+        similar_words_id = set(similar_words_id)
         logging.info('preparing articles data')
-        for article_id in articles_words_id:
+        for article_id in self.__articles_data.get_articles_id():
             articles_id.append(article_id)
-            articles_data.append(self.__words_id_to_data(self.__words_id_to_words_base_forms_id(articles_words_id[article_id])))
+            articles_data.append(self.__words_id_to_data(self.__words_id_to_words_base_forms_id(self.__articles_data.get_article_words_id(article_id, similar_words_id, is_title))))
         articles_data = np.array(articles_data)
         logging.info('articles size: %s' % str(articles_data.shape))
 
