@@ -4,6 +4,7 @@ from django import db
 import argparse
 import logging
 import multiprocessing
+import multiprocessing.managers
 import os
 import queue
 import re
@@ -95,8 +96,13 @@ def resolve_questions_word2vec(args, questions_queue, method_name, word2vec_mode
             break
 
 def start_word2vec(args, questions, method_name):
-    articles_data = calculators.word2vec_weight_calculator.ArticlesData()
-    word2vec_model = calculators.word2vec_weight_calculator.Word2VecWeightCalculator.load_word2vec_model(args.word2vec_file)
+    multiprocessing.managers.BaseManager.register('ArticlesData', calculators.word2vec_weight_calculator.ArticlesData)
+    multiprocessing.managers.BaseManager.register('Word2VecModel', calculators.word2vec_weight_calculator.Word2VecModel)
+    manager = multiprocessing.managers.BaseManager()
+    manager.start()
+    articles_data = manager.ArticlesData()
+    word2vec_model = manager.Word2VecModel(args.word2vec_file)
+
     logging.info('loading word2vec model')
     db.connections.close_all()
     logging.info('topn: %s' % args.topn)

@@ -43,10 +43,17 @@ class ArticlesData():
     def get_articles_id(self):
         return self.__content_articles_words.keys()
 
-class Word2VecWeightCalculator():
-    def load_word2vec_model(word2vec_file):
-        return gensim.models.KeyedVectors.load(word2vec_file)
+class Word2VecModel():
+    def  __init__(self, word2vec_file):
+        self.__word2vec_model = gensim.models.KeyedVectors.load(word2vec_file)
 
+    def most_similar(self, word, **kwargs):
+        return self.__word2vec_model.most_similar(word, **kwargs)
+
+    def get_vector(self, word):
+        return self.__word2vec_model.get_vector(word)
+
+class Word2VecWeightCalculator():
     def __init__(self, debug_top_items, word2vec_model, articles_data):
         self.__debug_top_items = debug_top_items
         logging.info('start reading stop words')
