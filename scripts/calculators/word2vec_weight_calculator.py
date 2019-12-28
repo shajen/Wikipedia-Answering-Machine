@@ -8,7 +8,11 @@ import numpy as np
 import scipy.spatial
 
 class ArticlesData():
-    def __init__(self):
+    def __init__(self, topn):
+        if topn >= 999:
+            top_words = 100
+        else:
+            top_words = 100000
         logging.info('loading articles words')
         stop_words = set(Word.objects.filter(is_stop_word=True).values_list('id', flat=True))
         self.__content_articles_words = {}
@@ -16,12 +20,14 @@ class ArticlesData():
         for (article_id, content_words, title_words) in Article.objects.values_list('id', 'content_words', 'title_words'):
             logging.debug('article: %d' % article_id)
             content_words = content_words.split(',')
+            content_words = content_words[:top_words]
             content_words = list(filter(lambda w: w != '', content_words))
             content_words = list(map(lambda w: int(w), content_words))
             content_words = list(filter(lambda w: w not in stop_words, content_words))
             self.__content_articles_words[article_id] = set(content_words)
 
             title_words = title_words.split(',')
+            title_words = title_words[:top_words]
             title_words = list(filter(lambda w: w != '', title_words))
             title_words = list(map(lambda w: int(w), title_words))
             title_words = list(filter(lambda w: w not in stop_words, title_words))
@@ -30,21 +36,23 @@ class ArticlesData():
     def get_article_words_id(self, article_id, words_id, is_title):
         if is_title:
             words = self.__title_articles_words[article_id]
-            if words_id != set():
+            if words_id:
                 return words_id.intersection(words)
             else:
                 return words
         else:
             words = self.__content_articles_words[article_id]
-            if words_id != set():
+            if words_id:
                 return words_id.intersection(words)
             else:
                 return words
+
     def get_articles_id(self):
         return self.__content_articles_words.keys()
 
 class Word2VecModel():
     def  __init__(self, word2vec_file):
+        logging.info('loading word2vec model')
         self.__word2vec_model = gensim.models.KeyedVectors.load(word2vec_file)
 
     def most_similar(self, word, **kwargs):
@@ -126,6 +134,17 @@ class Word2VecWeightCalculator():
         logging.info('words base forms count: %d' % len(set(question_words_id)))
 
         if topn >= 999:
+            try:
+                self.__word_id_to_vector
+            except:
+                similar_words_id = list(Word.objects.filter(is_stop_word=False).order_by('id').values_list('id', flat=True))
+                logging.info('similar words count: %d' % len(similar_words_id))
+
+                self.__load_words_id_vectors(similar_words_id)
+                logging.info('words vectors: %d' % len(set(self.__word_id_to_vector)))
+                self.__load_words_id_base_form_id(similar_words_id)
+                logging.info('words base forms: %d' % len(set(self.__word_id_to_word_base_form_id)))
+
             similar_words_id = []
         else:
             similar_words_id = self.__get_similar_words_id(question_words_id, topn)

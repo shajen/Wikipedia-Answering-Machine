@@ -85,7 +85,9 @@ def start_tfidf(args, questions, method_name, neighbors, minimal_word_idf_weight
         for thread in threads:
             thread.terminate()
 
-def resolve_questions_word2vec(args, questions_queue, method_name, word2vec_model, articles_data):
+def resolve_questions_word2vec(args, questions_queue, method_name):
+    articles_data = calculators.word2vec_weight_calculator.ArticlesData(args.topn)
+    word2vec_model = calculators.word2vec_weight_calculator.Word2VecModel(args.word2vec_file)
     word2vec_calculator = calculators.word2vec_weight_calculator.Word2VecWeightCalculator(args.debug_top_items, word2vec_model, articles_data)
     while True:
         try:
@@ -96,14 +98,6 @@ def resolve_questions_word2vec(args, questions_queue, method_name, word2vec_mode
             break
 
 def start_word2vec(args, questions, method_name):
-    multiprocessing.managers.BaseManager.register('ArticlesData', calculators.word2vec_weight_calculator.ArticlesData)
-    multiprocessing.managers.BaseManager.register('Word2VecModel', calculators.word2vec_weight_calculator.Word2VecModel)
-    manager = multiprocessing.managers.BaseManager()
-    manager.start()
-    articles_data = manager.ArticlesData()
-    word2vec_model = manager.Word2VecModel(args.word2vec_file)
-
-    logging.info('loading word2vec model')
     db.connections.close_all()
     logging.info('topn: %s' % args.topn)
     method_name = '%s, topn: %03d, type: word2vec' % (method_name, args.topn)
@@ -115,7 +109,7 @@ def start_word2vec(args, questions, method_name):
     threads = []
     try:
         for i in range(args.threads):
-            thread = multiprocessing.Process(target=resolve_questions_word2vec, args=(args, questions_queue, method_name, word2vec_model, articles_data))
+            thread = multiprocessing.Process(target=resolve_questions_word2vec, args=(args, questions_queue, method_name))
             thread.start()
             threads.append(thread)
 
