@@ -14,7 +14,7 @@ import re
 class NeuralWeightCalculator():
     _W2V_SIZE = 100
     __ARTICLES_CHUNKS = 100
-    __FILTERS = 6
+    __FILTERS = 64
 
     def __init__(self, debug_top_items, model_file, workdir, questions_words, articles_title_words, articles_content_words, good_bad_ratio, train_data_percentage):
         self.__debug_top_items = debug_top_items
@@ -252,7 +252,7 @@ class NeuralWeightCalculator():
     def _words_layers(self, filters, input):
         blocks = []
         input = tf.keras.layers.Conv1D(filters, 1, activation='relu')(input)
-        for i in [2, 3, 4, 5]:
+        for i in [2, 3]:
             block = tf.keras.layers.Conv1D(filters, i, activation='relu')(input)
             block = tf.keras.layers.GlobalMaxPooling1D()(block)
             blocks.append(block)
