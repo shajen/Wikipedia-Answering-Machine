@@ -117,7 +117,9 @@ class Word2VecWeightCalculator():
     def __prepare_question(self, question):
         question_words_id = self.__get_question_words_id(question)
         question_words_id = self.__filter_stop_words_id(question_words_id)
+        self.__load_words_id_base_form_id(question_words_id)
         question_words_id = self.__words_id_to_words_base_forms_id(question_words_id)
+        self.__load_words_id_vectors(question_words_id)
         return np.array(self.__words_id_to_data(question_words_id))
 
     def __prepare_articles(self, is_title, topn):
