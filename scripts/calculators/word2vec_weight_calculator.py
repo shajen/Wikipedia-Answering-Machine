@@ -6,6 +6,7 @@ import logging
 import numpy as np
 import scipy.spatial
 from tools.results_presenter import ResultsPresenter
+from more_itertools import unique_everseen
 
 class ArticlesData():
     def __init__(self, topn):
@@ -20,17 +21,17 @@ class ArticlesData():
         for (article_id, content_words, title_words) in Article.objects.values_list('id', 'content_words', 'title_words'):
             logging.debug('article: %d' % article_id)
             content_words = content_words.split(',')
-            content_words = content_words[:top_words]
             content_words = list(filter(lambda w: w != '', content_words))
             content_words = list(map(lambda w: int(w), content_words))
             content_words = list(filter(lambda w: w not in stop_words, content_words))
+            content_words = list(unique_everseen(content_words))[:top_words]
             self.__content_articles_words[article_id] = set(content_words)
 
             title_words = title_words.split(',')
-            title_words = title_words[:top_words]
             title_words = list(filter(lambda w: w != '', title_words))
             title_words = list(map(lambda w: int(w), title_words))
             title_words = list(filter(lambda w: w not in stop_words, title_words))
+            title_words = list(unique_everseen(title_words))[:top_words]
             self.__title_articles_words[article_id] = set(title_words)
 
     def get_article_words_id(self, article_id, words_id, is_title):
