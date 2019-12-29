@@ -16,7 +16,7 @@ class NeuralWeightCalculator():
     __ARTICLES_CHUNKS = 100
     __FILTERS = 64
 
-    def __init__(self, debug_top_items, model_file, workdir, questions_words, articles_title_words, articles_content_words, good_bad_ratio, train_data_percentage):
+    def __init__(self, debug_top_items, model_file, workdir, questions_words, articles_title_words, articles_content_words, good_bad_ratio):
         self.__debug_top_items = debug_top_items
         self.__model_file = model_file
         self.__workdir = workdir
@@ -24,7 +24,6 @@ class NeuralWeightCalculator():
         self.__articles_title_words = articles_title_words
         self.__articles_content_words = articles_content_words
         self.__good_bad_ratio = good_bad_ratio
-        self.__train_data_percentage = train_data_percentage
         self.__data_loaded = False
         self.__dataset_loaded = False
 
@@ -171,17 +170,15 @@ class NeuralWeightCalculator():
         self.__save_file('%s_articles_content' % dataset_name, articles_content)
         self.__save_file('%s_targets' % dataset_name, targets)
 
-    def __generate_dataset(self):
+    def generate_dataset(self, train_questions, test_questions):
         logging.info('start generating dataset')
-        self.__load_data()
-
-        questions = list(np.random.permutation(Question.objects.all()))
-        split_index = int(len(questions) * self.__train_data_percentage)
-        train_questions = questions[:split_index]
-        test_questions = questions[split_index:]
-
-        self.__generate_dataset_with_questions(train_questions, 'train')
-        self.__generate_dataset_with_questions(test_questions, 'test')
+        try:
+            self.__only_load_dataset()
+        except:
+            self.__load_data()
+            self.__generate_dataset_with_questions(train_questions, 'train')
+            self.__generate_dataset_with_questions(test_questions, 'test')
+            self.__only_load_dataset()
 
     def __only_load_dataset(self):
         if self.__dataset_loaded:
@@ -221,13 +218,6 @@ class NeuralWeightCalculator():
         logging.debug("targets: %s" % str(self.__test_targets.shape))
 
         self.__dataset_loaded = True
-
-    def __load_dataset(self):
-        try:
-            self.__only_load_dataset()
-        except:
-            self.__generate_dataset()
-            self.__only_load_dataset()
 
     def __simple_test_model(self, model, dataset_name, questions, articles_title, articles_content, target):
         test_scores = model.evaluate(
@@ -320,7 +310,6 @@ class NeuralWeightCalculator():
             return
 
         logging.info('training model')
-        self.__load_dataset()
 
         try:
             model = self.__load_model()
@@ -463,7 +452,6 @@ class NeuralWeightCalculator():
     def test(self, method_name):
         logging.info('testing model')
         method, created = Method.objects.get_or_create(name=method_name)
-        self.__load_dataset()
 
         model = self.__load_model()
         (questions_model, articles_model) = self.__extract_models(model)

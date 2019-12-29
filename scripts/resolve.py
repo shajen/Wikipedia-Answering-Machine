@@ -129,11 +129,17 @@ def start_neural(args, questions, method_name):
     logging.info("epoch: %d" % args.neural_model_epoch)
     method_name = '%s, topn: %03d, type: neural' % (method_name, args.topn)
 
-    neural_calculator = calculators.neural_weight_calculator.NeuralWeightCalculator(args.debug_top_items, args.word2vec_file, args.neural_model_work_directory, args.neural_model_questions_words_count, args.neural_model_articles_title_words_count, args.neural_model_articles_words_count, args.neural_model_good_bad_ratio, args.neural_model_train_data_percentage)
+    split_index = int(len(questions) * args.neural_model_train_data_percentage)
+    train_questions = questions[:split_index]
+    test_questions = questions[split_index:]
+
+    neural_calculator = calculators.neural_weight_calculator.NeuralWeightCalculator(args.debug_top_items, args.word2vec_file, args.neural_model_work_directory, args.neural_model_questions_words_count, args.neural_model_articles_title_words_count, args.neural_model_articles_words_count, args.neural_model_good_bad_ratio)
+    neural_calculator.generate_dataset(train_questions, test_questions)
     neural_calculator.train(args.neural_model_epoch)
     neural_calculator.test(method_name)
 
-    neural_calculator = calculators.deep_averaging_neural_weight_calculator.DeepAveragingNeuralWeightCalculator(args.debug_top_items, args.word2vec_file, args.neural_model_work_directory, args.neural_model_questions_words_count, args.neural_model_articles_title_words_count, args.neural_model_articles_words_count, args.neural_model_good_bad_ratio, args.neural_model_train_data_percentage)
+    neural_calculator = calculators.deep_averaging_neural_weight_calculator.DeepAveragingNeuralWeightCalculator(args.debug_top_items, args.word2vec_file, args.neural_model_work_directory, args.neural_model_questions_words_count, args.neural_model_articles_title_words_count, args.neural_model_articles_words_count, args.neural_model_good_bad_ratio)
+    neural_calculator.generate_dataset(train_questions, test_questions)
     neural_calculator.train(args.neural_model_epoch)
     neural_calculator.test(method_name)
 
@@ -187,7 +193,7 @@ def run(*args):
 
     tools.logger.configLogger(args.verbose)
 
-    questions = list(Question.objects.all())[:args.questions]
+    questions = list(Question.objects.order_by('id').all())[:args.questions]
     dirPath = os.path.dirname(os.path.realpath(__file__))
     commit_hash = subprocess.check_output(['git', '-C', dirPath, 'rev-parse', '--short', 'HEAD']).decode('ascii').strip()
     commit_datetime = subprocess.check_output(['git', '-C', dirPath, 'log', '-1', '--format=%at']).decode('ascii').strip()
