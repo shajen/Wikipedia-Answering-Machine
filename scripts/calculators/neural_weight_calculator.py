@@ -65,26 +65,17 @@ class NeuralWeightCalculator():
     def __words2vec(self, words):
         return list(map(lambda word: self.__word2vec(word), words))
 
-    def __prepare_article(self, article_id, words, is_title):
-        article_words = [None] * words
-        for (word_id, positions) in ArticleOccurrence.objects.filter(article_id=article_id, is_title=is_title).values_list('word_id', 'positions').iterator():
-            for position in positions.split(','):
-                try:
-                    position = int(position)
-                    if (position <= words):
-                        article_words[position - 1] = word_id
-                except:
-                    pass
-        return self.__words2vec(article_words)
-
-    def __prepare_articles(self, articles_id, words, is_title, show_progress):
-        logging.debug('preparing %d articles, top words: %d, title: %d' %(len(articles_id), words, is_title))
+    def __prepare_articles(self, articles_id, top_words, is_title, show_progress):
+        logging.debug('preparing %d articles, top words: %d, title: %d' %(len(articles_id), top_words, is_title))
         data = []
-        total = len(articles_id)
+        total = articles_id.shape[0]
         current = 1
         step = round(total / (10 if is_title else 100))
-        for article_id in articles_id:
-            data.append(self.__prepare_article(article_id, words, is_title))
+        stop_words = set(Word.objects.filter(is_stop_word=True).values_list('id', flat=True))
+        for article in Article.objects.filter(id__in=articles_id):
+            words = article.get_words_keep_positions(is_title, stop_words, top_words)
+            words = words +  [None] * (top_words - len(words))
+            data.append(np.array(self.__words2vec(words)))
             current += 1
             if current % step == 0 and show_progress:
                 logging.debug("progress: %d/%d (%.2f %%)" % (current, total, current / total * 100))
@@ -92,23 +83,17 @@ class NeuralWeightCalculator():
         logging.debug("data size: %s" % str(data.shape))
         return data
 
-    def __prepare_question(self, question_id, words):
-        question_words = [None] * words
-        for (word_id, positions) in QuestionOccurrence.objects.filter(question_id=question_id).values_list('word_id', 'positions').iterator():
-            for position in positions.split(','):
-                position = int(position)
-                if (position <= words):
-                    question_words[position - 1] = word_id
-        return self.__words2vec(question_words)
-
-    def __prepare_questions(self, questions_id, words):
-        logging.debug('preparing %d questions, top words: %d' %(len(questions_id), words))
+    def __prepare_questions(self, questions_id, top_words):
+        logging.debug('preparing %d questions, top words: %d' %(len(questions_id), top_words))
         data = []
-        total = len(questions_id)
+        total = questions_id.shape[0]
         current = 1
         step = round(total / 10)
-        for question_id in questions_id:
-            data.append(self.__prepare_question(question_id, words))
+        stop_words = set(Word.objects.filter(is_stop_word=True).values_list('id', flat=True))
+        for question in Question.objects.filter(id__in=questions_id):
+            words = question.get_words_keep_positions(stop_words, top_words)
+            words = words +  [None] * (top_words - len(words))
+            data.append(np.array(self.__words2vec(words)))
             current += 1
             if (current % step == 0):
                 logging.debug("progress: %d/%d (%.2f %%)" % (current, total, current / total * 100))
@@ -351,46 +336,6 @@ class NeuralWeightCalculator():
         except KeyboardInterrupt:
             logging.info('learing stoppped by user')
 
-    def  __prepare_all_questions(self):
-        logging.info('preparing questions')
-        questions_id = np.unique(self.__test_questions_id)
-        if os.path.isfile('%s/questions_id.npy' % self.__workdir) and os.path.isfile('%s/questions_data.npy' % self.__workdir):
-            saved_data_ok = np.array_equal(self.__load_file('questions_id'), questions_id)
-        else:
-            saved_data_ok = False
-        logging.info('saved data ok: %d' % saved_data_ok)
-        if not saved_data_ok:
-            self.__load_data()
-            questions_data = self.__prepare_questions(questions_id, self.__questions_words)
-            self.__save_file('questions_id', questions_id)
-            self.__save_file('questions_data', questions_data)
-
-    def  __prepare_all_articles(self):
-        logging.info('preparing articles chunks')
-        articles_id = np.array(list(Article.objects.order_by('id').values_list('id', flat=True)))
-        if os.path.isfile('%s/articles/articles_id.npy' % self.__workdir):
-            saved_data_ok = np.array_equal(self.__load_file('articles/articles_id'), articles_id)
-        else:
-            saved_data_ok = False
-        logging.info('saved data ok: %d' % saved_data_ok)
-
-        if not saved_data_ok:
-            self.__save_file('articles/articles_id', articles_id)
-        chunks = np.array_split(articles_id, NeuralWeightCalculator.__ARTICLES_CHUNKS)
-        i = 1
-        total = len(chunks)
-        for chunk_articles_id in chunks:
-            if not os.path.isfile('%s/articles/articles_content_chunk_%04d.npy' % (self.__workdir, i)) or not saved_data_ok:
-                self.__load_data()
-                articles_title = self.__prepare_articles(chunk_articles_id, self.__articles_title_words, True, False)
-                self.__save_file('articles/articles_title_chunk_%04d' % i, articles_title)
-                articles_content = self.__prepare_articles(chunk_articles_id, self.__articles_content_words, False, False)
-                self.__save_file('articles/articles_content_chunk_%04d' % i, articles_content)
-                logging.debug("progress: %d/%d (%.2f %%)" % (i, total, i / total * 100))
-            # else:
-            #     logging.debug("chunk %d already exists, skipping" % i)
-            i += 1
-
     def __full_test_article(self, method, bypass_model, question_id, question_data, articles_id, articles_data):
         questions_data = np.repeat([question_data], articles_data.shape[0], 0)
         logging.info(questions_data.shape)
@@ -399,29 +344,42 @@ class NeuralWeightCalculator():
             { 'questions': questions_data, 'articles': articles_data},
             batch_size=256,
             verbose=0).reshape(-1)
-        ResultsPresenter.present(Question.get(id=question_id), articles_id, articles_weight, method, self.__debug_top_items, False)
+        ResultsPresenter.present(Question.objects.get(id=question_id), articles_id, articles_weight, method, self.__debug_top_items, False)
 
-    def __full_test(self, method, questions_articles_weight, model, questions_model, articles_model, bypass_model):
-        logging.info('full test')
-        questions_id = self.__load_file('questions_id')
-        questions_data = self.__load_file('questions_data')
-        questions_output = predictet_target = questions_model.predict(questions_data, batch_size=64, verbose=0)
-        articles_id = self.__load_file('articles/articles_id')
-        articles_output = np.zeros(shape=(0, articles_model.output_shape[1]))
-        total = NeuralWeightCalculator.__ARTICLES_CHUNKS
-        for i in range(1, NeuralWeightCalculator.__ARTICLES_CHUNKS + 1):
-            chunks_articles_title = self.__load_file('articles/articles_title_chunk_%04d' % i)
-            chunks_articles_content = self.__load_file('articles/articles_content_chunk_%04d' % i)
-            chunks_articles_output = articles_model.predict({ 'articles_title': chunks_articles_title, 'articles_content': chunks_articles_content }, batch_size=256, verbose=0)
-            articles_output = np.concatenate((articles_output, chunks_articles_output), axis=0)
-            logging.debug("articles progress: %d/%d (%.2f %%)" % (i, total, i / total * 100))
-        logging.debug('articles output: %s' % str(articles_output.shape))
+    def __full_test_questions(self, method_name, questions_id, articles_id, articles_output, questions_model, bypass_model):
+        test_method, created = Method.objects.get_or_create(name=method_name)
+        questions_data = self.__prepare_questions(questions_id, self.__questions_words)
+        logging.info('questions_data: %s' % str(questions_data.shape))
+        questions_output = questions_model.predict(questions_data, batch_size=64, verbose=0)
         logging.debug('questions output: %s' % str(questions_output.shape))
 
         total = len(questions_id)
         for i in range(0, total):
-            self.__full_test_article(method, bypass_model, questions_id[i], questions_output[i], articles_id, articles_output)
+            self.__full_test_article(test_method, bypass_model, questions_id[i], questions_output[i], articles_id, articles_output)
             logging.debug("questions progress: %d/%d (%.2f %%)" % (i, total, i / total * 100))
+
+    def __full_test(self, method_name, test_questions_id, train_questions_id, articles_id, questions_articles_weight, model, questions_model, articles_model, bypass_model):
+        self.__load_data()
+        logging.info('full test')
+        logging.info('test questions: %s' % str(test_questions_id.shape))
+        logging.info('train questions: %s' % str(train_questions_id.shape))
+        logging.info('articles: %s' % str(articles_id.shape))
+
+        articles_output = np.zeros(shape=(0, articles_model.output_shape[1]))
+        articles_id_chunks = np.array_split(articles_id, NeuralWeightCalculator.__ARTICLES_CHUNKS)
+        current = 0
+        total = NeuralWeightCalculator.__ARTICLES_CHUNKS
+        for i in range(0, NeuralWeightCalculator.__ARTICLES_CHUNKS):
+            articles_title = self.__prepare_articles(articles_id_chunks[i], self.__articles_title_words, True, False)
+            articles_content = self.__prepare_articles(articles_id_chunks[i], self.__articles_content_words, False, False)
+            chunk_output = articles_model.predict({ 'articles_title': articles_title, 'articles_content': articles_content }, batch_size=256, verbose=0)
+            articles_output = np.concatenate((articles_output, chunk_output), axis=0)
+            current += 1
+            logging.debug("progress: %d/%d (%.2f %%)" % (current, total, current / total * 100))
+
+        logging.debug('articles output: %s' % str(articles_output.shape))
+        self.__full_test_questions('%s, dataset: test' % method_name, test_questions_id, articles_id, articles_output, questions_model, bypass_model)
+        self.__full_test_questions('%s, dataset: train' % method_name, train_questions_id, articles_id, articles_output, questions_model, bypass_model)
 
     def __prepare_bypass_model(self, model, bypass_model):
         for l1 in model.layers:
@@ -451,7 +409,6 @@ class NeuralWeightCalculator():
 
     def test(self, method_name):
         logging.info('testing model')
-        method, created = Method.objects.get_or_create(name=method_name)
 
         model = self.__load_model()
         (questions_model, articles_model) = self.__extract_models(model)
@@ -464,6 +421,7 @@ class NeuralWeightCalculator():
         questions_articles_weight = defaultdict(defaultdict)
         self.__simple_test_model(model, 'test', self.__test_questions, self.__test_articles_title, self.__test_articles_content, self.__test_targets)
         self.__semi_test_model(model, 'test', self.__test_questions, self.__test_articles_title, self.__test_articles_content, self.__test_targets)
-        # self.__prepare_all_questions()
-        # self.__prepare_all_articles()
-        # self.__full_test(method, questions_articles_weight, model, questions_model, articles_model, bypass_model)
+        test_questions_id = np.unique(self.__test_questions_id)
+        train_questions_id = np.unique(self.__train_questions_id)
+        articles_id = np.array(Article.objects.values_list('id', flat=True))
+        self.__full_test(method_name, test_questions_id, train_questions_id, articles_id, questions_articles_weight, model, questions_model, articles_model, bypass_model)

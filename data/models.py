@@ -1,5 +1,6 @@
 from django.db import models
 from django.core.validators import int_list_validator
+from more_itertools import unique_everseen
 
 class ListField(models.TextField):
     def __init__(self, *args, **kwargs):
@@ -72,6 +73,24 @@ class Article(models.Model):
     def __str__(self):
         return self.title
 
+    def __get_words(self, is_title, stop_words):
+        if is_title:
+            words = self.title_words.split(',')
+        else:
+            words = self.content_words.split(',')
+        words = list(filter(lambda w: w != '', words))
+        words = list(map(lambda w: int(w), words))
+        words = list(filter(lambda w: w not in stop_words, words))
+        return words
+
+    def get_words_unique(self,is_title, stop_words, top_words):
+        words = self.__get_words(is_title, stop_words)
+        words = list(unique_everseen(words))[:top_words]
+        return set(words)
+
+    def get_words_keep_positions(self, is_title, stop_words, top_words):
+        return self.__get_words(is_title, stop_words)[:top_words]
+
 class Method(models.Model):
     name = models.CharField(max_length=255, unique=True)
     added_date = models.DateTimeField(auto_now_add=True)
@@ -106,6 +125,21 @@ class Question(models.Model):
                 word = list(map(lambda occurrence: occurrence[0], current_occurrences))
                 words.append(tuple(word))
         return words
+
+    def __get_words(self, stop_words):
+        words = self.words.split(',')
+        words = list(filter(lambda w: w != '', words))
+        words = list(map(lambda w: int(w), words))
+        words = list(filter(lambda w: w not in stop_words, words))
+        return words
+
+    def get_words_unique(self, stop_words, top_words):
+        words = self.__get_words(stop_words)
+        words = list(unique_everseen(words))[:top_words]
+        return set(words)
+
+    def get_words_keep_positions(self, stop_words, top_words):
+        return self.__get_words(stop_words)[:top_words]
 
 class Answer(models.Model):
     article = models.ForeignKey(Article, on_delete=models.CASCADE)
