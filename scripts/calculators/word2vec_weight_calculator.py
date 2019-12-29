@@ -18,21 +18,10 @@ class ArticlesData():
         stop_words = set(Word.objects.filter(is_stop_word=True).values_list('id', flat=True))
         self.__content_articles_words = {}
         self.__title_articles_words = {}
-        for (article_id, content_words, title_words) in Article.objects.values_list('id', 'content_words', 'title_words'):
-            logging.debug('article: %d' % article_id)
-            content_words = content_words.split(',')
-            content_words = list(filter(lambda w: w != '', content_words))
-            content_words = list(map(lambda w: int(w), content_words))
-            content_words = list(filter(lambda w: w not in stop_words, content_words))
-            content_words = list(unique_everseen(content_words))[:top_words]
-            self.__content_articles_words[article_id] = set(content_words)
-
-            title_words = title_words.split(',')
-            title_words = list(filter(lambda w: w != '', title_words))
-            title_words = list(map(lambda w: int(w), title_words))
-            title_words = list(filter(lambda w: w not in stop_words, title_words))
-            title_words = list(unique_everseen(title_words))[:top_words]
-            self.__title_articles_words[article_id] = set(title_words)
+        for article in Article.objects.all():
+            logging.debug('article: %d' % article.id)
+            self.__content_articles_words[article.id] = article.get_words_unique(False, stop_words, top_words)
+            self.__title_articles_words[article.id] = article.get_words_unique(True, stop_words, top_words)
 
     def get_article_words_id(self, article_id, words_id, is_title):
         if is_title:
@@ -125,6 +114,31 @@ class Word2VecWeightCalculator():
         for id in ids:
             self.__word_id_to_word_base_form_id[id].append(id)
 
+    def __prepare_question(self, question):
+        question_words_id = self.__get_question_words_id(question)
+        question_words_id = self.__filter_stop_words_id(question_words_id)
+        question_words_id = self.__words_id_to_words_base_forms_id(question_words_id)
+        return np.array(self.__words_id_to_data(question_words_id))
+
+    def __prepare_articles(self, is_title, topn):
+        similar_words_id = list(Word.objects.filter(is_stop_word=False).order_by('id').values_list('id', flat=True))
+        logging.info('similar words count: %d' % len(similar_words_id))
+
+        self.__load_words_id_vectors(similar_words_id)
+        logging.info('words vectors: %d' % len(set(self.__word_id_to_vector)))
+        self.__load_words_id_base_form_id(similar_words_id)
+        logging.info('words base forms: %d' % len(set(self.__word_id_to_word_base_form_id)))
+
+        articles_id = []
+        articles_data = []
+        logging.info('preparing articles data')
+        for article_id in self.__articles_data.get_articles_id():
+            articles_id.append(article_id)
+            articles_data.append(self.__words_id_to_data(self.__words_id_to_words_base_forms_id(self.__articles_data.get_article_words_id(article_id, set(), is_title))))
+        articles_data = np.array(articles_data)
+        logging.info('articles size: %s' % str(articles_data.shape))
+        return (articles_id, articles_data)
+
     def __prepare_data(self, question, is_title, topn):
         question_words_id = self.__get_question_words_id(question)
         question_words_id = self.__filter_stop_words_id(question_words_id)
@@ -134,30 +148,16 @@ class Word2VecWeightCalculator():
         question_words_id = self.__words_id_to_words_base_forms_id(question_words_id)
         logging.info('words base forms count: %d' % len(set(question_words_id)))
 
-        if topn >= 999:
-            try:
-                self.__word_id_to_vector
-            except:
-                similar_words_id = list(Word.objects.filter(is_stop_word=False).order_by('id').values_list('id', flat=True))
-                logging.info('similar words count: %d' % len(similar_words_id))
+        similar_words_id = self.__get_similar_words_id(question_words_id, topn)
+        logging.info('similar words count: %d' % len(set(similar_words_id)))
 
-                self.__load_words_id_vectors(similar_words_id)
-                logging.info('words vectors: %d' % len(set(self.__word_id_to_vector)))
-                self.__load_words_id_base_form_id(similar_words_id)
-                logging.info('words base forms: %d' % len(set(self.__word_id_to_word_base_form_id)))
+        similar_words_id = self.__get_words_changed_forms_id(similar_words_id)
+        logging.info('changed form similar words count: %d' % len(set(similar_words_id)))
 
-            similar_words_id = []
-        else:
-            similar_words_id = self.__get_similar_words_id(question_words_id, topn)
-            logging.info('similar words count: %d' % len(set(similar_words_id)))
-
-            similar_words_id = self.__get_words_changed_forms_id(similar_words_id)
-            logging.info('changed form similar words count: %d' % len(set(similar_words_id)))
-
-            self.__load_words_id_vectors(similar_words_id)
-            logging.info('words vectors: %d' % len(set(self.__word_id_to_vector)))
-            self.__load_words_id_base_form_id(similar_words_id)
-            logging.info('words base forms: %d' % len(set(self.__word_id_to_word_base_form_id)))
+        self.__load_words_id_vectors(similar_words_id)
+        logging.info('words vectors: %d' % len(set(self.__word_id_to_vector)))
+        self.__load_words_id_base_form_id(similar_words_id)
+        logging.info('words base forms: %d' % len(set(self.__word_id_to_word_base_form_id)))
 
         articles_id = []
         articles_data = []
@@ -186,7 +186,17 @@ class Word2VecWeightCalculator():
     def calculate(self, question, method_name, is_title, topn):
         logging.info('calculating')
         method, created = Method.objects.get_or_create(name=method_name)
-        (question_data, articles_id, articles_data) = self.__prepare_data(question, is_title, topn)
+        if topn >= 999:
+            try:
+                articles_id = self.__articles_id
+                articles_data = self.__articles_data
+            except:
+                (articles_id, articles_data) = self.__prepare_articles(is_title, topn)
+                self.__articles_id = articles_id
+                self.__articles_data = articles_data
+            question_data = self.__prepare_question(question)
+        else:
+            (question_data, articles_id, articles_data) = self.__prepare_data(question, is_title, topn)
         if articles_data.size:
             distances = self.__calculate_distances(question_data, articles_data)
             ResultsPresenter.present(question, articles_id, distances, method, self.__debug_top_items, True)
