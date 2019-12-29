@@ -2,6 +2,7 @@ from collections import defaultdict
 from data.models import *
 from functools import reduce
 from termcolor import colored
+from tools.results_presenter import ResultsPresenter
 import gensim.models
 import logging
 import numpy as np
@@ -401,26 +402,6 @@ class NeuralWeightCalculator():
             #     logging.debug("chunk %d already exists, skipping" % i)
             i += 1
 
-    def __upload(self, method, question_id, articles_id, articles_weight):
-        order = np.argsort(articles_weight)[::-1]
-        articles_id = articles_id[order]
-        articles_weight = articles_weight[order]
-        solutions = []
-        rates = []
-        for answer in Answer.objects.filter(question_id=question_id):
-            try:
-                position = np.where(articles_id==answer.article_id)[0][0]
-                weight = articles_weight[position]
-            except:
-                position = 10**9
-                weight = 0.0
-            solutions.append(Solution(answer=answer, method=method, position=position))
-            rates.append(Rate(question_id=question_id, article_id=answer.article_id, method=method, weight=weight))
-        for i in range(0, min(self.__debug_top_items, articles_id.shape[0])):
-            rates.append(Rate(question_id=question_id, article_id=articles_id[i], method=method, weight=articles_weight[i]))
-        Solution.objects.bulk_create(solutions, ignore_conflicts=True)
-        Rate.objects.bulk_create(rates, ignore_conflicts=True)
-
     def __full_test_article(self, method, bypass_model, question_id, question_data, articles_id, articles_data):
         questions_data = np.repeat([question_data], articles_data.shape[0], 0)
         logging.info(questions_data.shape)
@@ -429,7 +410,7 @@ class NeuralWeightCalculator():
             { 'questions': questions_data, 'articles': articles_data},
             batch_size=256,
             verbose=0).reshape(-1)
-        self.__upload(method, question_id, articles_id, articles_weight)
+        ResultsPresenter.present(Question.get(id=question_id), articles_id, articles_weight, method, self.__debug_top_items, False)
 
     def __full_test(self, method, questions_articles_weight, model, questions_model, articles_model, bypass_model):
         logging.info('full test')
