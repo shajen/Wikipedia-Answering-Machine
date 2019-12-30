@@ -9,11 +9,7 @@ from tools.results_presenter import ResultsPresenter
 from more_itertools import unique_everseen
 
 class ArticlesData():
-    def __init__(self, topn):
-        if topn >= 999:
-            top_words = 100
-        else:
-            top_words = 100000
+    def __init__(self, top_words):
         logging.info('loading articles words')
         stop_words = set(Word.objects.filter(is_stop_word=True).values_list('id', flat=True))
         self.__content_articles_words = {}
@@ -61,6 +57,8 @@ class Word2VecWeightCalculator():
         self.__articles_data = articles_data
 
     def __get_similar_words_id(self, ids, topn):
+        if topn == 0:
+            return ids
         similar_words = []
         for word in Word.objects.filter(id__in=ids).values_list('value', flat=True):
             try:

@@ -86,7 +86,7 @@ def start_tfidf(args, questions, method_name, neighbors, minimal_word_idf_weight
             thread.terminate()
 
 def resolve_questions_word2vec(args, questions_queue, method_name):
-    articles_data = calculators.word2vec_weight_calculator.ArticlesData(args.topn)
+    articles_data = calculators.word2vec_weight_calculator.ArticlesData(100)
     word2vec_model = calculators.word2vec_weight_calculator.Word2VecModel(args.word2vec_file)
     word2vec_calculator = calculators.word2vec_weight_calculator.Word2VecWeightCalculator(args.debug_top_items, word2vec_model, articles_data)
     while True:
