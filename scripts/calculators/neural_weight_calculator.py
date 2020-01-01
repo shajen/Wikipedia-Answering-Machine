@@ -72,7 +72,8 @@ class NeuralWeightCalculator():
         current = 1
         step = round(total / (10 if is_title else 100))
         stop_words = set(Word.objects.filter(is_stop_word=True).values_list('id', flat=True))
-        for article in Article.objects.filter(id__in=articles_id):
+        for article_id in articles_id:
+            article = Article.objects.get(id=article_id)
             words = article.get_words_keep_positions(is_title, stop_words, top_words)
             words = words +  [None] * (top_words - len(words))
             data.append(np.array(self.__words2vec(words)))
@@ -90,7 +91,8 @@ class NeuralWeightCalculator():
         current = 1
         step = round(total / 10)
         stop_words = set(Word.objects.filter(is_stop_word=True).values_list('id', flat=True))
-        for question in Question.objects.filter(id__in=questions_id):
+        for question_id in questions_id:
+            question = Question.objects.get(id=question_id)
             words = question.get_words_keep_positions(stop_words, top_words)
             words = words +  [None] * (top_words - len(words))
             data.append(np.array(self.__words2vec(words)))
@@ -130,7 +132,7 @@ class NeuralWeightCalculator():
         logging.debug('bad articles: %d' % len(bad_articles_id))
 
         articles_id = np.concatenate((np.array(good_articles_id), np.array(bad_articles_id)))
-        logging.debug('total articles: %d' % len(bad_articles_id))
+        logging.debug('total articles: %d' % len(articles_id))
 
         questions_id = np.repeat(np.array([questions_id]), self.__good_bad_ratio + 1, axis=0).reshape(-1)
         logging.debug('total questions: %d' % len(questions_id))
