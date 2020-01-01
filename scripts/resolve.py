@@ -135,15 +135,17 @@ def start_neural(args, questions, method_name):
     test_questions = questions[split_index:]
 
     data_loader = tools.data_loader.DataLoader(args.neural_model_questions_words_count, args.neural_model_articles_title_words_count, args.neural_model_articles_words_count, '', 100)
-    neural_calculator = calculators.neural_weight_calculator.NeuralWeightCalculator(data_loader, args.debug_top_items, args.neural_model_work_directory, args.neural_model_questions_words_count, args.neural_model_articles_title_words_count, args.neural_model_articles_words_count, args.neural_model_good_bad_ratio)
-    neural_calculator.generate_dataset(train_questions, test_questions)
-    neural_calculator.train(args.neural_model_epoch)
-    neural_calculator.test(method_name)
+    if args.convolution_neural_network:
+        neural_calculator = calculators.neural_weight_calculator.NeuralWeightCalculator(data_loader, args.debug_top_items, args.neural_model_work_directory, args.neural_model_questions_words_count, args.neural_model_articles_title_words_count, args.neural_model_articles_words_count, args.neural_model_good_bad_ratio)
+        neural_calculator.generate_dataset(train_questions, test_questions)
+        neural_calculator.train(args.neural_model_epoch)
+        neural_calculator.test(method_name)
 
-    neural_calculator = calculators.deep_averaging_neural_weight_calculator.DeepAveragingNeuralWeightCalculator(data_loader, args.debug_top_items, args.neural_model_work_directory, args.neural_model_questions_words_count, args.neural_model_articles_title_words_count, args.neural_model_articles_words_count, args.neural_model_good_bad_ratio)
-    neural_calculator.generate_dataset(train_questions, test_questions)
-    neural_calculator.train(args.neural_model_epoch)
-    neural_calculator.test(method_name)
+    if args.deep_averaging_network:
+        neural_calculator = calculators.deep_averaging_neural_weight_calculator.DeepAveragingNeuralWeightCalculator(data_loader, args.debug_top_items, args.neural_model_work_directory, args.neural_model_questions_words_count, args.neural_model_articles_title_words_count, args.neural_model_articles_words_count, args.neural_model_good_bad_ratio)
+        neural_calculator.generate_dataset(train_questions, test_questions)
+        neural_calculator.train(args.neural_model_epoch)
+        neural_calculator.test(method_name)
 
 def start(args, questions, method_name, neighbors, minimal_word_idf_weights, power_factors):
     logging.info('start')
@@ -154,7 +156,7 @@ def start(args, questions, method_name, neighbors, minimal_word_idf_weights, pow
         start_tfidf(args, questions, method_name, neighbors, minimal_word_idf_weights, power_factors)
     if args.word2vec_model:
         start_word2vec(args, questions, method_name)
-    if args.neural_model:
+    if args.convolution_neural_network or args.deep_averaging_network:
         start_neural(args, questions, method_name)
     logging.info('finish')
 
@@ -175,7 +177,8 @@ def run(*args):
     parser.add_argument("-tm", "--tfidf_models", help="use td-idf models", action='store_true')
     parser.add_argument("-vm", "--vector_models", help="use vector models", action='store_true')
     parser.add_argument("-w2vm", "--word2vec_model", help="use word2vec model", action='store_true')
-    parser.add_argument("-nm", "--neural_model", help="use neural model", action='store_true')
+    parser.add_argument("-cnn", "--convolution_neural_network", help="use onvolution neural network", action='store_true')
+    parser.add_argument("-dag", "--deep_averaging_network", help="use deep averaging network", action='store_true')
     parser.add_argument("-nm_qwc", "--neural_model_questions_words_count", help="use first n words from questions", type=int, default=20)
     parser.add_argument("-nm_atwc", "--neural_model_articles_title_words_count", help="use first n words from articles title", type=int, default=20)
     parser.add_argument("-nm_awc", "--neural_model_articles_words_count", help="use first n words from articles", type=int, default=100)
