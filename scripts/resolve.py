@@ -22,6 +22,7 @@ import calculators.tf_idf_weight_calculator
 import calculators.weight_comparator
 import calculators.word2vec_weight_calculator
 import tools.logger
+import tools.data_loader
 
 def resolve_questions_tf_idf(args, questions_queue, method_name, neighbors, minimal_word_idf_weights, power_factors):
     tf_idf_calculator = calculators.tf_idf_weight_calculator.TfIdfWeightCalculator(args.debug_top_items, args.ngram)
@@ -85,10 +86,8 @@ def start_tfidf(args, questions, method_name, neighbors, minimal_word_idf_weight
         for thread in threads:
             thread.terminate()
 
-def resolve_questions_word2vec(args, questions_queue, method_name):
-    articles_data = calculators.word2vec_weight_calculator.ArticlesData(100)
-    word2vec_model = calculators.word2vec_weight_calculator.Word2VecModel(args.word2vec_file)
-    word2vec_calculator = calculators.word2vec_weight_calculator.Word2VecWeightCalculator(args.debug_top_items, word2vec_model, articles_data)
+def resolve_questions_word2vec(args, questions_queue, method_name, data_loader):
+    word2vec_calculator = calculators.word2vec_weight_calculator.Word2VecWeightCalculator(args.debug_top_items, data_loader)
     while True:
         try:
             question = questions_queue.get(timeout=1)
@@ -98,6 +97,7 @@ def resolve_questions_word2vec(args, questions_queue, method_name):
             break
 
 def start_word2vec(args, questions, method_name):
+    data_loader = tools.data_loader.DataLoader(args.neural_model_questions_words_count, args.neural_model_articles_title_words_count, args.neural_model_articles_words_count, args.word2vec_file, 100)
     db.connections.close_all()
     logging.info('topn: %s' % args.topn)
     method_name = '%s, topn: %03d, type: word2vec' % (method_name, args.topn)
@@ -109,7 +109,7 @@ def start_word2vec(args, questions, method_name):
     threads = []
     try:
         for i in range(args.threads):
-            thread = multiprocessing.Process(target=resolve_questions_word2vec, args=(args, questions_queue, method_name))
+            thread = multiprocessing.Process(target=resolve_questions_word2vec, args=(args, questions_queue, method_name, data_loader))
             thread.start()
             threads.append(thread)
 

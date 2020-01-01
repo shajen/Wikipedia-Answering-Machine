@@ -1,6 +1,7 @@
 from django.db import models
 from django.core.validators import int_list_validator
 from more_itertools import unique_everseen
+import numpy as np
 
 class ListField(models.TextField):
     def __init__(self, *args, **kwargs):
@@ -73,6 +74,18 @@ class Article(models.Model):
     def __str__(self):
         return self.title
 
+    def get_words(self, is_title, stop_words, top_words):
+        if is_title:
+            words = self.title_words.split(',')
+        else:
+            words = self.content_words.split(',')
+        words = list(filter(lambda w: w != '', words))
+        words = list(map(lambda w: int(w), words))
+        words = list(filter(lambda w: w not in stop_words, words))
+        words = np.array(words[:top_words])
+        words = np.concatenate((words, np.zeros(shape=(top_words - words.shape[0]))), axis=0)
+        return words
+
     def __get_words(self, is_title, stop_words):
         if is_title:
             words = self.title_words.split(',')
@@ -124,6 +137,15 @@ class Question(models.Model):
             if current_occurrences[-1][1] - current_occurrences[0][1] == ngram - 1:
                 word = list(map(lambda occurrence: occurrence[0], current_occurrences))
                 words.append(tuple(word))
+        return words
+
+    def get_words(self, stop_words, top_words):
+        words = self.words.split(',')
+        words = list(filter(lambda w: w != '', words))
+        words = list(map(lambda w: int(w), words))
+        words = list(filter(lambda w: w not in stop_words, words))
+        words = np.array(words[:top_words])
+        words = np.concatenate((words, np.zeros(shape=(top_words - words.shape[0]))), axis=0)
         return words
 
     def __get_words(self, stop_words):
