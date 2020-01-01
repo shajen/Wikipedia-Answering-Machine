@@ -33,7 +33,8 @@ class Word2VecWeightCalculator():
     def __prepare_articles(self, question, is_title, topn):
         logging.info('preparing articles data')
         question_words = set(self.__data_loader.get_question_words_id(question.id))
-        question_words.remove(0)
+        if 0 in question_words:
+            question_words.remove(0)
         logging.info('words set count: %d' % len(question_words))
         question_words = self.__data_loader.get_words_base_forms(question_words)
         logging.info('words set count: %d' % len(question_words))
