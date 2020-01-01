@@ -16,54 +16,18 @@ class NeuralWeightCalculator():
     __ARTICLES_CHUNKS = 100
     __FILTERS = 64
 
-    def __init__(self, debug_top_items, model_file, workdir, questions_words, articles_title_words, articles_content_words, good_bad_ratio):
+    def __init__(self, data_loader, debug_top_items, workdir, questions_words, articles_title_words, articles_content_words, good_bad_ratio):
+        self.__data_loader = data_loader
         self.__debug_top_items = debug_top_items
-        self.__model_file = model_file
         self.__workdir = workdir
         self.__questions_words = questions_words
         self.__articles_title_words = articles_title_words
         self.__articles_content_words = articles_content_words
         self.__good_bad_ratio = good_bad_ratio
-        self.__data_loaded = False
         self.__dataset_loaded = False
-
-    def __load_data(self):
-        if self.__data_loaded:
-            return
-
-        logging.info('loading data')
-        logging.info('reading base forms')
-        stop_words_id = list(Word.objects.filter(is_stop_word=True).values_list('id', flat=True))
-        self.__changed_word_id_to_base_form_id = {}
-        for (changed_word_id, base_word_id) in WordForm.objects.exclude(changed_word_id__in=stop_words_id).values_list('changed_word_id', 'base_word_id'):
-            self.__changed_word_id_to_base_form_id[changed_word_id] = base_word_id
-
-        logging.info('reading word2vec model')
-        self.__word2vec_model = gensim.models.KeyedVectors.load(self.__model_file)
-
-        logging.info('reading words vec value')
-        self.__word_id_to_vector = {}
-        for (word_id, value) in Word.objects.values_list('id', 'value'):
-            try:
-                self.__word_id_to_vector[word_id] = self.__word2vec_model.get_vector(value)
-            except KeyError:
-                pass
-        logging.info('words vec size: %d' % (len(self.__word_id_to_vector)))
-        self.__data_loaded = True
 
     def __colored(self, text, colour):
         return colored(text, colour, attrs={'bold'})
-
-    def __word2vec(self, word):
-        if word in self.__changed_word_id_to_base_form_id:
-            word = self.__changed_word_id_to_base_form_id[word]
-        if word in self.__word_id_to_vector:
-            return self.__word_id_to_vector[word]
-        else:
-            return np.array([0.0] * NeuralWeightCalculator._W2V_SIZE)
-
-    def __words2vec(self, words):
-        return list(map(lambda word: self.__word2vec(word), words))
 
     def __prepare_articles(self, articles_id, top_words, is_title, show_progress):
         logging.debug('preparing %d articles, top words: %d, title: %d' %(len(articles_id), top_words, is_title))
@@ -71,12 +35,9 @@ class NeuralWeightCalculator():
         total = articles_id.shape[0]
         current = 1
         step = round(total / (10 if is_title else 100))
-        stop_words = set(Word.objects.filter(is_stop_word=True).values_list('id', flat=True))
         for article_id in articles_id:
-            article = Article.objects.get(id=article_id)
-            words = article.get_words_keep_positions(is_title, stop_words, top_words)
-            words = words +  [None] * (top_words - len(words))
-            data.append(np.array(self.__words2vec(words)))
+            words = self.__data_loader.get_article_words_id(article_id, is_title)
+            data.append(np.nan_to_num(self.__data_loader.get_words_data(words)))
             current += 1
             if current % step == 0 and show_progress:
                 logging.debug("progress: %d/%d (%.2f %%)" % (current, total, current / total * 100))
@@ -90,12 +51,9 @@ class NeuralWeightCalculator():
         total = questions_id.shape[0]
         current = 1
         step = round(total / 10)
-        stop_words = set(Word.objects.filter(is_stop_word=True).values_list('id', flat=True))
         for question_id in questions_id:
-            question = Question.objects.get(id=question_id)
-            words = question.get_words_keep_positions(stop_words, top_words)
-            words = words +  [None] * (top_words - len(words))
-            data.append(np.array(self.__words2vec(words)))
+            words = self.__data_loader.get_question_words_id(question_id)
+            data.append(np.nan_to_num(self.__data_loader.get_words_data(words)))
             current += 1
             if (current % step == 0):
                 logging.debug("progress: %d/%d (%.2f %%)" % (current, total, current / total * 100))
@@ -162,7 +120,6 @@ class NeuralWeightCalculator():
         try:
             self.__only_load_dataset()
         except:
-            self.__load_data()
             self.__generate_dataset_with_questions(train_questions, 'train')
             self.__generate_dataset_with_questions(test_questions, 'test')
             self.__only_load_dataset()
@@ -361,7 +318,6 @@ class NeuralWeightCalculator():
             logging.debug("questions progress: %d/%d (%.2f %%)" % (i, total, i / total * 100))
 
     def __full_test(self, method_name, test_questions_id, train_questions_id, articles_id, questions_articles_weight, model, questions_model, articles_model, bypass_model):
-        self.__load_data()
         logging.info('full test')
         logging.info('test questions: %s' % str(test_questions_id.shape))
         logging.info('train questions: %s' % str(train_questions_id.shape))

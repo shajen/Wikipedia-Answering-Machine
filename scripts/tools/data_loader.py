@@ -9,13 +9,14 @@ class DataLoader():
     def __init__(self, question_words, article_title_words, article_content_words, word2vec_file, word2vec_size):
         logging.info('data loader initializing')
 
-        logging.info('loading word2vec model')
-        self.__word2vec_model = gensim.models.KeyedVectors.load(word2vec_file, mmap='r')
+        if word2vec_file:
+            logging.info('loading word2vec model')
+            self.__word2vec_model = gensim.models.KeyedVectors.load(word2vec_file, mmap='r')
 
         stop_words = set(Word.objects.filter(is_stop_word=True).values_list('id', flat=True))
         self.__load_questions(stop_words, question_words)
         self.__load_articles(stop_words, article_title_words, article_content_words)
-        self.__load_words(word2vec_file, word2vec_size, 10)
+        self.__load_words(word2vec_size, 10)
 
     def __create_or_link(self, name, shape, type):
         try:
@@ -76,7 +77,7 @@ class DataLoader():
             self.__articles_content_words[article.id] = article.get_words(False, stop_words, article_content_words)
             i += 1
 
-    def __load_words(self, word2vec_file, word2vec_size, similar_words_top_n):
+    def __load_words(self, word2vec_size, similar_words_top_n):
         words_count = Word.objects.count()
         max_words_id = Word.objects.order_by('-id')[0].id + 1
         logging.info('words count: %d' % words_count)

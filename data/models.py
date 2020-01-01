@@ -86,24 +86,6 @@ class Article(models.Model):
         words = np.concatenate((words, np.zeros(shape=(top_words - words.shape[0]))), axis=0)
         return words
 
-    def __get_words(self, is_title, stop_words):
-        if is_title:
-            words = self.title_words.split(',')
-        else:
-            words = self.content_words.split(',')
-        words = list(filter(lambda w: w != '', words))
-        words = list(map(lambda w: int(w), words))
-        words = list(filter(lambda w: w not in stop_words, words))
-        return words
-
-    def get_words_unique(self,is_title, stop_words, top_words):
-        words = self.__get_words(is_title, stop_words)
-        words = list(unique_everseen(words))[:top_words]
-        return set(words)
-
-    def get_words_keep_positions(self, is_title, stop_words, top_words):
-        return self.__get_words(is_title, stop_words)[:top_words]
-
 class Method(models.Model):
     name = models.CharField(max_length=255, unique=True)
     added_date = models.DateTimeField(auto_now_add=True)
@@ -147,21 +129,6 @@ class Question(models.Model):
         words = np.array(words[:top_words])
         words = np.concatenate((words, np.zeros(shape=(top_words - words.shape[0]))), axis=0)
         return words
-
-    def __get_words(self, stop_words):
-        words = self.words.split(',')
-        words = list(filter(lambda w: w != '', words))
-        words = list(map(lambda w: int(w), words))
-        words = list(filter(lambda w: w not in stop_words, words))
-        return words
-
-    def get_words_unique(self, stop_words, top_words):
-        words = self.__get_words(stop_words)
-        words = list(unique_everseen(words))[:top_words]
-        return set(words)
-
-    def get_words_keep_positions(self, stop_words, top_words):
-        return self.__get_words(stop_words)[:top_words]
 
 class Answer(models.Model):
     article = models.ForeignKey(Article, on_delete=models.CASCADE)
