@@ -139,13 +139,21 @@ def start_neural(args, questions, method_name):
         neural_calculator = calculators.neural_weight_calculator.NeuralWeightCalculator(data_loader, args.debug_top_items, args.neural_model_work_directory, args.neural_model_questions_words_count, args.neural_model_articles_title_words_count, args.neural_model_articles_words_count, args.neural_model_good_bad_ratio)
         neural_calculator.generate_dataset(train_questions, test_questions)
         neural_calculator.train(args.neural_model_epoch)
-        neural_calculator.test(method_name)
+        neural_calculator.prepare_for_testing()
+        for q in train_questions:
+            neural_calculator.test(q, '%s, dateset: train' % method_name)
+        for q in test_questions:
+            neural_calculator.test(q, '%s, dateset: test' % method_name)
 
     if args.deep_averaging_network:
         neural_calculator = calculators.deep_averaging_neural_weight_calculator.DeepAveragingNeuralWeightCalculator(data_loader, args.debug_top_items, args.neural_model_work_directory, args.neural_model_questions_words_count, args.neural_model_articles_title_words_count, args.neural_model_articles_words_count, args.neural_model_good_bad_ratio)
         neural_calculator.generate_dataset(train_questions, test_questions)
         neural_calculator.train(args.neural_model_epoch)
-        neural_calculator.test(method_name)
+        neural_calculator.prepare_for_testing()
+        for q in train_questions:
+            neural_calculator.test(q, '%s, dateset: train' % method_name)
+        for q in test_questions:
+            neural_calculator.test(q, '%s, dateset: test' % method_name)
 
 def start(args, questions, method_name, neighbors, minimal_word_idf_weights, power_factors):
     logging.info('start')

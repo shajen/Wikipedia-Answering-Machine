@@ -1,13 +1,10 @@
-from collections import defaultdict
 from data.models import *
 from functools import reduce
 from termcolor import colored
 from tools.results_presenter import ResultsPresenter
-import gensim.models
 import logging
 import numpy as np
 import os
-import sys
 import tensorflow as tf
 import re
 
@@ -30,14 +27,17 @@ class NeuralWeightCalculator():
         return colored(text, colour, attrs={'bold'})
 
     def __prepare_articles(self, articles_id, top_words, is_title, show_progress):
-        logging.debug('preparing %d articles, top words: %d, title: %d' %(len(articles_id), top_words, is_title))
-        data = []
+        logging.debug('preparing %d articles, top words: %d, title: %d' % (articles_id.shape[0], top_words, is_title))
+        if is_title:
+            data = np.zeros(shape=(articles_id.shape[0], self.__articles_title_words, NeuralWeightCalculator._W2V_SIZE), dtype=np.float32)
+        else:
+            data = np.zeros(shape=(articles_id.shape[0], self.__articles_content_words, NeuralWeightCalculator._W2V_SIZE), dtype=np.float32)
         total = articles_id.shape[0]
-        current = 1
+        current = 0
         step = round(total / (10 if is_title else 100))
         for article_id in articles_id:
             words = self.__data_loader.get_article_words_id(article_id, is_title)
-            data.append(np.nan_to_num(self.__data_loader.get_words_data(words)))
+            data[current] = np.nan_to_num(self.__data_loader.get_words_data(words))
             current += 1
             if current % step == 0 and show_progress:
                 logging.debug("progress: %d/%d (%.2f %%)" % (current, total, current / total * 100))
@@ -317,28 +317,6 @@ class NeuralWeightCalculator():
             self.__full_test_article(test_method, bypass_model, questions_id[i], questions_output[i], articles_id, articles_output)
             logging.debug("questions progress: %d/%d (%.2f %%)" % (i, total, i / total * 100))
 
-    def __full_test(self, method_name, test_questions_id, train_questions_id, articles_id, questions_articles_weight, model, questions_model, articles_model, bypass_model):
-        logging.info('full test')
-        logging.info('test questions: %s' % str(test_questions_id.shape))
-        logging.info('train questions: %s' % str(train_questions_id.shape))
-        logging.info('articles: %s' % str(articles_id.shape))
-
-        articles_output = np.zeros(shape=(0, articles_model.output_shape[1]))
-        articles_id_chunks = np.array_split(articles_id, NeuralWeightCalculator.__ARTICLES_CHUNKS)
-        current = 0
-        total = NeuralWeightCalculator.__ARTICLES_CHUNKS
-        for i in range(0, NeuralWeightCalculator.__ARTICLES_CHUNKS):
-            articles_title = self.__prepare_articles(articles_id_chunks[i], self.__articles_title_words, True, False)
-            articles_content = self.__prepare_articles(articles_id_chunks[i], self.__articles_content_words, False, False)
-            chunk_output = articles_model.predict({ 'articles_title': articles_title, 'articles_content': articles_content }, batch_size=256, verbose=0)
-            articles_output = np.concatenate((articles_output, chunk_output), axis=0)
-            current += 1
-            logging.debug("progress: %d/%d (%.2f %%)" % (current, total, current / total * 100))
-
-        logging.debug('articles output: %s' % str(articles_output.shape))
-        self.__full_test_questions('%s, dataset: test' % method_name, test_questions_id, articles_id, articles_output, questions_model, bypass_model)
-        self.__full_test_questions('%s, dataset: train' % method_name, train_questions_id, articles_id, articles_output, questions_model, bypass_model)
-
     def __prepare_bypass_model(self, model, bypass_model):
         for l1 in model.layers:
             for l2 in bypass_model.layers:
@@ -365,21 +343,33 @@ class NeuralWeightCalculator():
         for i in model.outputs:
             logging.debug("    %s" % str(i.shape))
 
-    def test(self, method_name):
-        logging.info('testing model')
-
+    def prepare_for_testing(self):
         model = self.__load_model()
-        (questions_model, articles_model) = self.__extract_models(model)
-        bypass_model = self.__create_distances_model(NeuralWeightCalculator.__FILTERS, True)
-        self.__prepare_bypass_model(model, bypass_model)
+        (self.__questions_model, articles_model) = self.__extract_models(model)
+        self.__bypass_model = self.__create_distances_model(NeuralWeightCalculator.__FILTERS, True)
+        self.__prepare_bypass_model(model, self.__bypass_model)
         NeuralWeightCalculator.__print_model(model)
-        NeuralWeightCalculator.__print_model(questions_model)
+        NeuralWeightCalculator.__print_model(self.__questions_model)
         NeuralWeightCalculator.__print_model(articles_model)
-        NeuralWeightCalculator.__print_model(bypass_model)
-        questions_articles_weight = defaultdict(defaultdict)
+        NeuralWeightCalculator.__print_model(self.__bypass_model)
         self.__simple_test_model(model, 'test', self.__test_questions, self.__test_articles_title, self.__test_articles_content, self.__test_targets)
         self.__semi_test_model(model, 'test', self.__test_questions, self.__test_articles_title, self.__test_articles_content, self.__test_targets)
-        test_questions_id = np.unique(self.__test_questions_id)
-        train_questions_id = np.unique(self.__train_questions_id)
-        articles_id = np.array(Article.objects.values_list('id', flat=True))
-        self.__full_test(method_name, test_questions_id, train_questions_id, articles_id, questions_articles_weight, model, questions_model, articles_model, bypass_model)
+
+        self.__articles_id = self.__data_loader.get_articles_id()
+        self.__articles_output = np.zeros(shape=(0, articles_model.output_shape[1]))
+        articles_id_chunks = np.array_split(self.__articles_id, NeuralWeightCalculator.__ARTICLES_CHUNKS)
+        current = 0
+        total = NeuralWeightCalculator.__ARTICLES_CHUNKS
+        for i in range(0, NeuralWeightCalculator.__ARTICLES_CHUNKS):
+            articles_title = self.__prepare_articles(articles_id_chunks[i], self.__articles_title_words, True, False)
+            articles_content = self.__prepare_articles(articles_id_chunks[i], self.__articles_content_words, False, False)
+            chunk_output = articles_model.predict({ 'articles_title': articles_title, 'articles_content': articles_content }, batch_size=256, verbose=0)
+            self.__articles_output = np.concatenate((self.__articles_output, chunk_output), axis=0)
+            current += 1
+            logging.debug("progress: %d/%d (%.2f %%)" % (current, total, current / total * 100))
+
+        logging.info('articles id: %s' % str(self.__articles_id.shape))
+        logging.info('articles output: %s' % str(self.__articles_output.shape))
+
+    def test(self, question, method_name):
+        self.__full_test_questions(method_name, [question], self.__articles_id, self.__articles_output, self.__questions_model, self.__bypass_model)
