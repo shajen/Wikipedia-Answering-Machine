@@ -21,7 +21,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'django_extensions',
     'data',
-    'registration',
+    'django_registration',
     'bootstrap3',
     'bootstrapform',
 ]
