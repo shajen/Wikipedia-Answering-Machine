@@ -100,7 +100,7 @@ def start_neural(args, questions, method_name, model_class):
     train_questions = questions[:split_index]
     test_questions = questions[split_index:]
 
-    data_loader = tools.data_loader.DataLoader(args.neural_model_questions_words_count, args.neural_model_articles_title_words_count, args.neural_model_articles_words_count, '', 100)
+    data_loader = tools.data_loader.DataLoader(args.neural_model_questions_words_count, args.neural_model_articles_title_words_count, args.neural_model_articles_words_count, args.word2vec_file, 100)
     model = model_class(data_loader, args.debug_top_items, args.neural_model_work_directory, args.neural_model_questions_words_count, args.neural_model_articles_title_words_count, args.neural_model_articles_words_count, args.neural_model_good_bad_ratio)
     model.generate_dataset(train_questions, test_questions)
     model.train(args.neural_model_epoch)

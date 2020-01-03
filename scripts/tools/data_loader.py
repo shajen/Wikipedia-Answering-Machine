@@ -8,15 +8,18 @@ import SharedArray
 class DataLoader():
     def __init__(self, question_words, article_title_words, article_content_words, word2vec_file, word2vec_size):
         logging.info('data loader initializing')
-
-        if word2vec_file:
-            logging.info('loading word2vec model')
-            self.__word2vec_model = gensim.models.KeyedVectors.load(word2vec_file, mmap='r')
-
+        self.__word2vec_file = word2vec_file
         stop_words = set(Word.objects.filter(is_stop_word=True).values_list('id', flat=True))
         self.__load_questions(stop_words, question_words)
         self.__load_articles(stop_words, article_title_words, article_content_words)
         self.__load_words(word2vec_size, 10)
+
+    def __load_word2vec_model(self):
+        try:
+            self.__word2vec_model
+        except:
+            logging.info('loading word2vec model')
+            self.__word2vec_model = gensim.models.KeyedVectors.load(self.__word2vec_file, mmap='r')
 
     def __create_or_link(self, name, shape, type):
         try:
@@ -78,6 +81,7 @@ class DataLoader():
             i += 1
 
     def __load_words(self, word2vec_size, similar_words_top_n):
+        self.__load_word2vec_model()
         words_count = Word.objects.count()
         max_words_id = Word.objects.order_by('-id')[0].id + 1
         logging.info('words count: %d' % words_count)
@@ -117,6 +121,7 @@ class DataLoader():
                 logging.debug("vector already exists")
 
     def get_words_similar_words(self, words, topn):
+        self.__load_word2vec_model()
         similar_words = []
         for value in Word.objects.filter(id__in=words).values_list("value", flat=True):
             if value in self.__word2vec_model:
