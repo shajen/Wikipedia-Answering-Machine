@@ -33,7 +33,7 @@ class ResultsPresenter():
             scores = np.argsort(np.argsort(distances)[::-1])
         corrected_articles_id = list(question.answer_set.all().values_list('article_id', flat=True))
         logging.warning(ResultsPresenter.__colored('question (%5d): %s' % (question.id, question), 'yellow'))
-        for position in range(0, min(len(distances), debug_top_items)):
+        for position in range(0, min(distances.shape[0], debug_top_items)):
             rates.append(ResultsPresenter.__print(corrected_articles_id, position, articles_id, scores, distances, question, method, is_smaller_first))
 
         for answer in question.answer_set.all():

@@ -14,10 +14,8 @@ import sys
 import random
 sys.path.append(os.path.dirname(__file__))
 
-import calculators.categories_weight_calculator
-import calculators.links_weight_calculator
-import calculators.neural_weight_calculator
 import calculators.deep_averaging_neural_weight_calculator
+import calculators.neural_weight_calculator
 import calculators.tf_idf_weight_calculator
 import calculators.weight_comparator
 import calculators.word2vec_weight_calculator
@@ -26,8 +24,6 @@ import tools.data_loader
 
 def resolve_questions_tf_idf(args, questions_queue, method_name, neighbors, minimal_word_idf_weights, power_factors):
     tf_idf_calculator = calculators.tf_idf_weight_calculator.TfIdfWeightCalculator(args.debug_top_items, args.ngram)
-    # links_wc = calculators.links_weight_calculator.LinksWeightCalculator(debug_top_items)
-    # categories_wc = calculators.categories_weight_calculator.CategoriesWeightCalculator(debug_top_items)
 
     while True:
         try:
@@ -42,10 +38,10 @@ def resolve_questions_tf_idf(args, questions_queue, method_name, neighbors, mini
                 for minimal_word_idf_weight in minimal_word_idf_weights:
                     comparators = []
                     method_name = '%s, mwiw: %.2f' % (method, minimal_word_idf_weight)
-                    if tfidf_models:
+                    if args.tfidf_models:
                         for power_factor in power_factors:
                             comparators.append(calculators.weight_comparator.TfIdfWeightComparator(method_name, neighbor, power_factor))
-                    if vector_models:
+                    if args.vector_models:
                         comparators.append(calculators.weight_comparator.CosineWeightComparator(method_name, neighbor))
                         comparators.append(calculators.weight_comparator.EuclideanWeightComparator(method_name, neighbor))
                         comparators.append(calculators.weight_comparator.CityblockWeightComparator(method_name, neighbor))
@@ -56,8 +52,6 @@ def resolve_questions_tf_idf(args, questions_queue, method_name, neighbors, mini
                             tf_idf_calculator.prepare(question, args.title)
                             prepared = True
                         tf_idf_calculator.calculate(question, neighbor, minimal_word_idf_weight, comparators)
-                # links_wc.upload_positions(q, method, articles_weight)
-                # categories_wc.upload_positions(q, method, articles_weight)
         except queue.Empty:
             break
 

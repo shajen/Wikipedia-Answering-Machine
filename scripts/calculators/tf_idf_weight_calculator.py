@@ -1,14 +1,18 @@
 from collections import defaultdict, deque, Counter
 from data.models import *
-import calculators.weight_calculator
 import logging
 import math
 import re
+import numpy as np
+import tools.results_presenter
 
-class TfIdfWeightCalculator(calculators.weight_calculator.WeightCalculator):
+class TfIdfWeightCalculator():
     def __init__(self, debug_top_items, ngram):
-        super().__init__(debug_top_items)
+        self.debug_top_items = debug_top_items
         self.ngram = ngram
+        logging.info('start reading articles')
+        self.articles_count = Article.objects.filter(content_words_count__gte=20).count()
+        logging.info('finish reading')
         logging.info('start parsing questions')
         self.questions_words_count = defaultdict(lambda: 0)
         for question in Question.objects.all():
@@ -174,8 +178,8 @@ class TfIdfWeightCalculator(calculators.weight_calculator.WeightCalculator):
     def calculate(self, question, sum_neighbors, minimal_word_idf_weight, comparators):
         (comparators_articles_words_weight, comparators_articles_weight) = self.__count_tf_idf(question, sum_neighbors, minimal_word_idf_weight, comparators)
         for comparator in comparators:
-            logging.info('')
-            logging.info('method %s' % comparator.method())
             (articles_words_weight, articles_weight) = (comparators_articles_words_weight[comparator.method()], comparators_articles_weight[comparator.method()])
-            positions = self._count_positions(question, articles_words_weight, articles_weight, comparator.ascending_order(), Article.objects, Word.objects)
-            self._upload_positions(positions, comparator.method())
+            articles_id = list(articles_weight.keys())
+            distances = np.array(list(articles_weight.values()))
+            (method, created) = Method.objects.get_or_create(name=comparator.method())
+            tools.results_presenter.ResultsPresenter.present(question, articles_id, distances, method, self.debug_top_items, not comparator.ascending_order())
