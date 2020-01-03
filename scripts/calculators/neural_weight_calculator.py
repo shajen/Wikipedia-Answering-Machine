@@ -34,7 +34,7 @@ class NeuralWeightCalculator():
             data = np.zeros(shape=(articles_id.shape[0], self.__articles_content_words, NeuralWeightCalculator._W2V_SIZE), dtype=np.float32)
         total = articles_id.shape[0]
         current = 0
-        step = round(total / (10 if is_title else 100))
+        step = max(1, round(total / (10 if is_title else 100)))
         for article_id in articles_id:
             words = self.__data_loader.get_article_words_id(article_id, is_title)
             data[current] = np.nan_to_num(self.__data_loader.get_words_data(words))
@@ -50,7 +50,7 @@ class NeuralWeightCalculator():
         data = []
         total = questions_id.shape[0]
         current = 1
-        step = round(total / 10)
+        step = max(1, round(total / 10))
         for question_id in questions_id:
             words = self.__data_loader.get_question_words_id(question_id)
             data.append(np.nan_to_num(self.__data_loader.get_words_data(words)))
@@ -305,17 +305,11 @@ class NeuralWeightCalculator():
             verbose=0).reshape(-1)
         ResultsPresenter.present(Question.objects.get(id=question_id), articles_id, articles_weight, method, self.__debug_top_items, False)
 
-    def __full_test_questions(self, method_name, questions_id, articles_id, articles_output, questions_model, bypass_model):
+    def __full_test_questions(self, method_name, question_id, articles_id, articles_output, questions_model, bypass_model):
         test_method, created = Method.objects.get_or_create(name=method_name)
-        questions_data = self.__prepare_questions(questions_id, self.__questions_words)
-        logging.info('questions_data: %s' % str(questions_data.shape))
+        questions_data = self.__prepare_questions(np.array([question_id]), self.__questions_words)
         questions_output = questions_model.predict(questions_data, batch_size=64, verbose=0)
-        logging.debug('questions output: %s' % str(questions_output.shape))
-
-        total = len(questions_id)
-        for i in range(0, total):
-            self.__full_test_article(test_method, bypass_model, questions_id[i], questions_output[i], articles_id, articles_output)
-            logging.debug("questions progress: %d/%d (%.2f %%)" % (i, total, i / total * 100))
+        self.__full_test_article(test_method, bypass_model, question_id, questions_output[0], articles_id, articles_output)
 
     def __prepare_bypass_model(self, model, bypass_model):
         for l1 in model.layers:
@@ -371,5 +365,5 @@ class NeuralWeightCalculator():
         logging.info('articles id: %s' % str(self.__articles_id.shape))
         logging.info('articles output: %s' % str(self.__articles_output.shape))
 
-    def test(self, question, method_name):
-        self.__full_test_questions(method_name, [question], self.__articles_id, self.__articles_output, self.__questions_model, self.__bypass_model)
+    def test(self, question_id, method_name):
+        self.__full_test_questions(method_name, question_id, self.__articles_id, self.__articles_output, self.__questions_model, self.__bypass_model)
