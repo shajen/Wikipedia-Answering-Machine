@@ -46,7 +46,7 @@ def resolve_questions_tf_idf(args, questions_queue, method_name, neighbors, mini
                         comparators.append(calculators.weight_comparator.EuclideanWeightComparator(method_name, neighbor))
                         comparators.append(calculators.weight_comparator.CityblockWeightComparator(method_name, neighbor))
 
-                    comparators = list(filter(lambda comparator: not comparator.has_already_solutions(question), comparators))
+                    comparators = list(filter(lambda comparator: not tools.results_presenter.ResultsPresenter.is_already_solved(question, comparator.method()), comparators))
                     if comparators:
                         if not prepared:
                             tf_idf_calculator.prepare(question, args.title)
@@ -85,7 +85,7 @@ def resolve_questions_word2vec(args, questions_queue, method_name, data_loader):
     while True:
         try:
             question = questions_queue.get(timeout=1)
-            if not word2vec_calculator.has_already_solutions(question, method_name):
+            if not tools.results_presenter.ResultsPresenter.is_already_solved(question, method_name):
                 word2vec_calculator.calculate(question, method_name, args.title, args.topn)
         except queue.Empty:
             break

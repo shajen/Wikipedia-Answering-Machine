@@ -51,3 +51,11 @@ class ResultsPresenter():
                 rates.append(Rate(weight=ResultsPresenter.__get_weight(distance, is_smaller_first), question=question, article=answer.article, method=method))
         Rate.objects.bulk_create(rates, ignore_conflicts=True)
         logging.info('')
+
+    def is_already_solved(question, method_name):
+        try:
+            answers = Answer.objects.filter(question=question).values_list('id', flat=True)
+            method = Method.objects.get(name=method_name)
+            return Solution.objects.filter(method=method, answer_id__in=answers).count() == len(answers)
+        except Exception as e:
+            return False

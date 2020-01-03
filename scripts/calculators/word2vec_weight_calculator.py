@@ -61,14 +61,6 @@ class Word2VecWeightCalculator():
     def __calculate_distances(self, question_data, articles_data):
         return scipy.spatial.distance.cdist(np.array([question_data]), articles_data, 'cosine')[0]
 
-    def has_already_solutions(self, question, method_name):
-        try:
-            answers = Answer.objects.filter(question=question).values_list('id', flat=True)
-            method = Method.objects.get(name=method_name)
-            return Solution.objects.filter(method=method, answer_id__in=answers).count() == len(answers)
-        except Exception as e:
-            return False
-
     def calculate(self, question, method_name, is_title, topn):
         logging.info('calculating')
         method, created = Method.objects.get_or_create(name=method_name)

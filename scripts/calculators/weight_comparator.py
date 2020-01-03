@@ -1,7 +1,6 @@
 from collections import defaultdict
 from data.models import *
 from scipy.spatial.distance import cdist
-import calculators.weight_calculator
 import logging
 import math
 import numpy as np
@@ -15,14 +14,6 @@ class WeightComparator:
         self.__sum_neighbors = sum_neighbors
         self.__ascending_order = ascending_order
         self.__distance_function = distance_function
-
-    def has_already_solutions(self, question):
-        try:
-            answers = Answer.objects.filter(question=question).values_list('id', flat=True)
-            method = Method.objects.get(name=self.method())
-            return Solution.objects.filter(method=method, answer_id__in=answers).count() == len(answers)
-        except Exception as e:
-            return False
 
     def method(self):
         return self.__method_name + (", type: %s_vector_%03d_neighbors" % (self.__distance_function, self.__sum_neighbors))
