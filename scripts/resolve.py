@@ -4,14 +4,11 @@ from django import db
 import argparse
 import logging
 import multiprocessing
-import multiprocessing.managers
 import os
 import queue
-import re
 import shlex
 import subprocess
 import sys
-import random
 sys.path.append(os.path.dirname(__file__))
 
 import calculators.deep_averaging_neural_weight_calculator
@@ -19,20 +16,20 @@ import calculators.neural_weight_calculator
 import calculators.tf_idf_weight_calculator
 import calculators.weight_comparator
 import calculators.word2vec_weight_calculator
-import tools.logger
 import tools.data_loader
+import tools.logger
+import tools.results_presenter
 
-def resolve_questions_tf_idf(args, questions_queue, method_name, neighbors, minimal_word_idf_weights, power_factors):
+def resolve_questions_tf_idf(args, questions_queue, method):
+    neighbors = list(map(lambda x: int(x), args.neighbors.split(',')))
+    minimal_word_idf_weights = list(map(lambda x: float(x), args.minimal_word_idf_weights.split(',')))
+    power_factors = list(map(lambda x: int(x), args.power_factors.split(',')))
+
     tf_idf_calculator = calculators.tf_idf_weight_calculator.TfIdfWeightCalculator(args.debug_top_items, args.ngram)
 
     while True:
         try:
             question = questions_queue.get(timeout=1)
-            logging.info('')
-            logging.info('*' * 80)
-            logging.info('processing question:')
-            logging.info('%d: %s' % (question.id, question.name))
-
             prepared = False
             for neighbor in neighbors:
                 for minimal_word_idf_weight in minimal_word_idf_weights:
@@ -55,31 +52,6 @@ def resolve_questions_tf_idf(args, questions_queue, method_name, neighbors, mini
         except queue.Empty:
             break
 
-def start_tfidf(args, questions, method_name, neighbors, minimal_word_idf_weights, power_factors):
-    db.connections.close_all()
-    logging.info('neighbors: %s' % neighbors)
-    logging.info('minimal_word_idf_weights: %s' % minimal_word_idf_weights)
-    logging.info('power_factors: %s' % power_factors)
-    method_name = '%s, ngram: %d' % (method_name, args.ngram)
-    logging.info('method_name: %s' % method_name)
-    questions_queue = multiprocessing.Queue()
-    for question in questions:
-        questions_queue.put(question)
-
-    try:
-        threads = []
-        for i in range(args.threads):
-            thread = multiprocessing.Process(target=resolve_questions_tf_idf, args=(args, questions_queue, method_name, neighbors, minimal_word_idf_weights, power_factors))
-            thread.start()
-            threads.append(thread)
-
-        for thread in threads:
-            thread.join()
-    except KeyboardInterrupt:
-        logging.info('stopping threads')
-        for thread in threads:
-            thread.terminate()
-
 def resolve_questions_word2vec(args, questions_queue, method_name, data_loader):
     word2vec_calculator = calculators.word2vec_weight_calculator.Word2VecWeightCalculator(args.debug_top_items, data_loader)
     while True:
@@ -90,23 +62,19 @@ def resolve_questions_word2vec(args, questions_queue, method_name, data_loader):
         except queue.Empty:
             break
 
-def start_word2vec(args, questions, method_name):
-    data_loader = tools.data_loader.DataLoader(args.neural_model_questions_words_count, args.neural_model_articles_title_words_count, args.neural_model_articles_words_count, args.word2vec_file, 100)
+def start_callback_threads(args, questions, method_name, callback, callback_arguments):
     db.connections.close_all()
-    logging.info('topn: %s' % args.topn)
-    method_name = '%s, topn: %03d, type: word2vec' % (method_name, args.topn)
     logging.info('method_name: %s' % method_name)
     questions_queue = multiprocessing.Queue()
     for question in questions:
         questions_queue.put(question)
 
-    threads = []
     try:
+        threads = []
         for i in range(args.threads):
-            thread = multiprocessing.Process(target=resolve_questions_word2vec, args=(args, questions_queue, method_name, data_loader))
+            thread = multiprocessing.Process(target=callback, args=(args, questions_queue, method_name) + callback_arguments)
             thread.start()
             threads.append(thread)
-
         for thread in threads:
             thread.join()
     except KeyboardInterrupt:
@@ -114,14 +82,18 @@ def start_word2vec(args, questions, method_name):
         for thread in threads:
             thread.terminate()
 
-def start_neural(args, questions, method_name):
+def resolve_questions_neural(args, questions, method_name, model):
+    for question in questions:
+        if not tools.results_presenter.ResultsPresenter.is_already_solved(question, method_name):
+            model.test(question.id, method_name)
+
+def start_neural(args, questions, method_name, model_class):
     logging.info("questions_words_count: %d" % args.neural_model_questions_words_count)
     logging.info("articles_title_words_count: %d" % args.neural_model_articles_title_words_count)
     logging.info("articles_words_count: %d" % args.neural_model_articles_words_count)
     logging.info("good_bad_ratio: %d" % args.neural_model_good_bad_ratio)
     logging.info("train_data_percentage: %.2f" % args.neural_model_train_data_percentage)
     logging.info("epoch: %d" % args.neural_model_epoch)
-    method_name = '%s, topn: %03d, type: neural' % (method_name, args.topn)
     logging.info('method_name: %s' % method_name)
 
     split_index = int(len(questions) * args.neural_model_train_data_percentage)
@@ -129,38 +101,37 @@ def start_neural(args, questions, method_name):
     test_questions = questions[split_index:]
 
     data_loader = tools.data_loader.DataLoader(args.neural_model_questions_words_count, args.neural_model_articles_title_words_count, args.neural_model_articles_words_count, '', 100)
-    if args.convolution_neural_network:
-        neural_calculator = calculators.neural_weight_calculator.NeuralWeightCalculator(data_loader, args.debug_top_items, args.neural_model_work_directory, args.neural_model_questions_words_count, args.neural_model_articles_title_words_count, args.neural_model_articles_words_count, args.neural_model_good_bad_ratio)
-        neural_calculator.generate_dataset(train_questions, test_questions)
-        neural_calculator.train(args.neural_model_epoch)
-        neural_calculator.prepare_for_testing()
-        for q in train_questions:
-            neural_calculator.test(q, '%s, dateset: train' % method_name)
-        for q in test_questions:
-            neural_calculator.test(q, '%s, dateset: test' % method_name)
+    model = model_class(data_loader, args.debug_top_items, args.neural_model_work_directory, args.neural_model_questions_words_count, args.neural_model_articles_title_words_count, args.neural_model_articles_words_count, args.neural_model_good_bad_ratio)
+    model.generate_dataset(train_questions, test_questions)
+    model.train(args.neural_model_epoch)
+    model.prepare_for_testing()
+    resolve_questions_neural(args, train_questions, '%s, dateset: train' % method_name, model)
+    resolve_questions_neural(args, test_questions, '%s, dateset: test' % method_name, model)
 
-    if args.deep_averaging_network:
-        neural_calculator = calculators.deep_averaging_neural_weight_calculator.DeepAveragingNeuralWeightCalculator(data_loader, args.debug_top_items, args.neural_model_work_directory, args.neural_model_questions_words_count, args.neural_model_articles_title_words_count, args.neural_model_articles_words_count, args.neural_model_good_bad_ratio)
-        neural_calculator.generate_dataset(train_questions, test_questions)
-        neural_calculator.train(args.neural_model_epoch)
-        neural_calculator.prepare_for_testing()
-        for q in train_questions:
-            neural_calculator.test(q, '%s, dateset: train' % method_name)
-        for q in test_questions:
-            neural_calculator.test(q, '%s, dateset: test' % method_name)
-
-def start(args, questions, method_name, neighbors, minimal_word_idf_weights, power_factors):
-    logging.info('start')
+def start(args, questions, method_name):
     logging.info('questions: %d' % len(questions))
     logging.info('threads: %d' % args.threads)
     logging.info('debug_top_items: %d' % args.debug_top_items)
+    logging.info('topn: %d' % args.topn)
     if args.tfidf_models or args.vector_models:
-        start_tfidf(args, questions, method_name, neighbors, minimal_word_idf_weights, power_factors)
+        start_callback_threads(args, questions, '%s, type: tfidf, title: %d, ngram: %d' % (method_name, args.title, args.ngram), resolve_questions_tf_idf, ())
     if args.word2vec_model:
-        start_word2vec(args, questions, method_name)
-    if args.convolution_neural_network or args.deep_averaging_network:
-        start_neural(args, questions, method_name)
+        data_loader = tools.data_loader.DataLoader(args.neural_model_questions_words_count, args.neural_model_articles_title_words_count, args.neural_model_articles_words_count, args.word2vec_file, 100)
+        start_callback_threads(args, questions, '%s, type: w2v, topn: %03d, title: %d' % (method_name, args.topn, args.title), resolve_questions_word2vec, (data_loader,))
+    if args.convolution_neural_network:
+        start_neural(args, questions, '%s, type: cnn, topn: %03d' % (method_name, args.topn), calculators.neural_weight_calculator.NeuralWeightCalculator)
+    if args.deep_averaging_network:
+        start_neural(args, questions, '%s, type: dan, topn: %03d' % (method_name, args.topn), calculators.deep_averaging_neural_weight_calculator.DeepAveragingNeuralWeightCalculator)
     logging.info('finish')
+
+def get_method_name(args):
+    dirPath = os.path.dirname(os.path.realpath(__file__))
+    commit_hash = subprocess.check_output(['git', '-C', dirPath, 'rev-parse', '--short', 'HEAD']).decode('ascii').strip()
+    commit_datetime = subprocess.check_output(['git', '-C', dirPath, 'log', '-1', '--format=%at']).decode('ascii').strip()
+    method_name = 'git: %s_%s' % (commit_datetime, commit_hash)
+    if args.method:
+        method_name = 'name: %s, %s' % (args.method, method_name)
+    return method_name
 
 def run(*args):
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
@@ -180,7 +151,7 @@ def run(*args):
     parser.add_argument("-vm", "--vector_models", help="use vector models", action='store_true')
     parser.add_argument("-w2vm", "--word2vec_model", help="use word2vec model", action='store_true')
     parser.add_argument("-cnn", "--convolution_neural_network", help="use onvolution neural network", action='store_true')
-    parser.add_argument("-dag", "--deep_averaging_network", help="use deep averaging network", action='store_true')
+    parser.add_argument("-dan", "--deep_averaging_network", help="use deep averaging network", action='store_true')
     parser.add_argument("-nm_qwc", "--neural_model_questions_words_count", help="use first n words from questions", type=int, default=20)
     parser.add_argument("-nm_atwc", "--neural_model_articles_title_words_count", help="use first n words from articles title", type=int, default=20)
     parser.add_argument("-nm_awc", "--neural_model_articles_words_count", help="use first n words from articles", type=int, default=100)
@@ -199,15 +170,5 @@ def run(*args):
     args = parser.parse_args(args)
 
     tools.logger.configLogger(args.verbose)
-
     questions = list(Question.objects.order_by('id').all())[:args.questions]
-    dirPath = os.path.dirname(os.path.realpath(__file__))
-    commit_hash = subprocess.check_output(['git', '-C', dirPath, 'rev-parse', '--short', 'HEAD']).decode('ascii').strip()
-    commit_datetime = subprocess.check_output(['git', '-C', dirPath, 'log', '-1', '--format=%at']).decode('ascii').strip()
-    method_name = 'git: %s_%s, title: %d' % (commit_datetime, commit_hash, args.title)
-    if args.method:
-        method_name = 'name: %s, %s' % (args.method, method_name)
-    neighbors = list(map(lambda x: int(x), args.neighbors.split(',')))
-    minimal_word_idf_weights = list(map(lambda x: float(x), args.minimal_word_idf_weights.split(',')))
-    power_factors = list(map(lambda x: int(x), args.power_factors.split(',')))
-    start(args, questions, method_name, neighbors, minimal_word_idf_weights, power_factors)
+    start(args, questions, get_method_name(args))
