@@ -59,7 +59,10 @@ class Word2VecWeightCalculator():
         return (articles_id, articles_data)
 
     def __calculate_distances(self, question_data, articles_data):
-        return scipy.spatial.distance.cdist(np.array([question_data]), articles_data, 'cosine')[0]
+        if articles_data.size:
+            return scipy.spatial.distance.cdist(np.array([question_data]), articles_data, 'cosine')[0]
+        else:
+            return np.zeros(shape=(0,1))
 
     def calculate(self, question, method_name, is_title, topn):
         logging.info('calculating')
@@ -75,6 +78,5 @@ class Word2VecWeightCalculator():
                 self.__articles_data = articles_data
         else:
             (articles_id, articles_data) = self.__prepare_articles(question, is_title, topn)
-        if articles_data.size:
-            distances = self.__calculate_distances(question_data, articles_data)
-            ResultsPresenter.present(question, articles_id, distances, method, self.__debug_top_items, True)
+        distances = self.__calculate_distances(question_data, articles_data)
+        ResultsPresenter.present(question, articles_id, distances, method, self.__debug_top_items, True)
