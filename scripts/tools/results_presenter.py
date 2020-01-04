@@ -26,6 +26,7 @@ class ResultsPresenter():
         return Rate(weight=ResultsPresenter.__get_weight(distance, is_smaller_first), article=article, question=question, method=method)
 
     def present(question, articles_id, distances, method, debug_top_items, is_smaller_first):
+        logging.warning(ResultsPresenter.__colored('method (%d): %s' % (method.id, method.name), 'cyan'))
         rates = []
         if is_smaller_first:
             scores = np.argsort(np.argsort(distances))

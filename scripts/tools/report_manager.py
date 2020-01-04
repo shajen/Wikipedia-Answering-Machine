@@ -41,8 +41,8 @@ class ReportManager():
 
     def printErrorRate(self, args):
         methods_questions_positions = self.calculateMethodsQuestionsPositions(args)
-        LEN = 120
-        sys.stdout.write(' ' * LEN + '     #')
+        LEN = 105
+        sys.stdout.write(' ' * (LEN + 7) + '     #')
         for t in args['tops']:
             sys.stdout.write('  %6d' % t)
         sys.stdout.write('\n')
@@ -56,9 +56,9 @@ class ReportManager():
             if all(len(list(filter(lambda x: x <= t, positions)))/answersCount <= args['hideScoreTreshold'] for t in args['tops']):
                 continue
             if len(method.name) <= LEN:
-                sys.stdout.write("%s %5d" % (self.methodColor(method.name.ljust(LEN)), answersCount))
+                sys.stdout.write("#%5d %s %5d" % (method.id, self.methodColor(method.name.ljust(LEN)), answersCount))
             else:
-                sys.stdout.write("%s\n" % self.methodColor(method.name))
+                sys.stdout.write("#%5d %s\n" % (method.id, self.methodColor(method.name)))
                 sys.stdout.write('%s %5d' % (' ' * LEN, answersCount))
 
             for t in args['tops']:
