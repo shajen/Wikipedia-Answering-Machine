@@ -51,6 +51,9 @@ class EvolutionaryAlgorithm():
         articles_data = np.zeros(shape=(len(methods_id), len(articles_id)), dtype=np.float32)
         answers = Answer.objects.filter(question_id=question_id)
         for method_id in methods_id:
+            if 'w2v' in methods_id_name[method_id]:
+                method_index = methods_id_position[method_id]
+                articles_data[method_index].fill(1.0)
             corrected_articles_position = {}
             for answer in answers:
                 try:
@@ -64,9 +67,7 @@ class EvolutionaryAlgorithm():
                     continue
                 article_index = articles_id_position[article_id]
                 method_index = methods_id_position[method_id]
-                if weight == 100000.0: #TF-IDF model fix
-                    articles_data[method_index][article_index] = 0.0
-                else:
+                if weight != 100000.0: #word2vec
                     articles_data[method_index][article_index] = weight
             self.__normalise(articles_data[method_index], methods_id_name[method_id])
         # self.__train_data[question_id] = (articles_id, np.transpose(articles_data))
