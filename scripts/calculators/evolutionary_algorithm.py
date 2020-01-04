@@ -8,10 +8,11 @@ import deap.tools
 import logging
 import numpy as np
 import random
+import pickle
 
 class EvolutionaryAlgorithm():
-    def __init__(self):
-        pass
+    def __init__(self, workdir):
+        self.__workdir = workdir
 
     def __get_methods(self, methods_patterns):
         methods_id = set(Method.objects.order_by('id').values_list('id', flat=True))
@@ -81,6 +82,13 @@ class EvolutionaryAlgorithm():
         return (articles_id, np.transpose(articles_data), corrected_articles_id)
 
     def __prepare_for_training(self, questions_id, methods_id, methods_id_position, methods_id_name):
+        try:
+            train_data = self.__load_data('train_data')
+            logging.info('loading train data succesful')
+            return train_data
+        except:
+            logging.info('generating new train data')
+
         logging.info("methods: %d" % len(methods_id))
         train_data = {}
 
@@ -92,6 +100,8 @@ class EvolutionaryAlgorithm():
             current += 1
             if current % step == 0:
                 logging.debug("progress: %d/%d (%.2f %%)" % (current, total, current / total * 100))
+
+        self.__save_data(train_data, 'train_data')
         return train_data
 
     def __get_articles_positions(self, individual, question_id, train_data, debug):
@@ -122,6 +132,33 @@ class EvolutionaryAlgorithm():
                 total_ones += 1
         return total_ones / len(train_data)
 
+    def __save_data(self, data, name):
+        filename = '%s/%s.pkl' % (self.__workdir, name)
+        logging.debug('saving %s' % filename)
+        with open(filename, "wb") as cp_file:
+            pickle.dump(data, cp_file)
+
+    def __load_data(self, name):
+        filename = '%s/%s.pkl' % (self.__workdir, name)
+        logging.debug('loading %s' % filename)
+        with open(filename, "rb") as file:
+            return pickle.load(file)
+
+    def __load_population(self):
+        logging.debug('loading population')
+        data = self.__load_data('population')
+        random.setstate(data["rndstate"])
+        return data["population"]
+
+    def __save_population(self, population):
+        logging.debug('saving population')
+        data = dict(population=population, rndstate=random.getstate())
+        self.__save_data(data, 'population')
+
+    def __get_best_score(self, population, train_data):
+        individual = deap.tools.selBest(population, k=1)[0]
+        return self.__score(individual, train_data, True)
+
     def train(self, questions_id, methods_patterns, population, generations):
         (methods_id, methods_id_position, methods_id_name) = self.__get_methods(methods_patterns)
         train_data = self.__prepare_for_training(questions_id, methods_id, methods_id_position, methods_id_name)
@@ -137,7 +174,16 @@ class EvolutionaryAlgorithm():
         toolbox.register("mutate", deap.tools.mutFlipBit, indpb=0.05)
         toolbox.register("select", deap.tools.selTournament, tournsize=3)
 
-        population = toolbox.population(n=population)
+        try:
+            population = self.__load_population()
+            logging.info('load population succesful')
+        except Exception as e:
+            logging.error(e)
+            population = toolbox.population(n=population)
+            logging.info('create new population')
+
+        best_score = self.__get_best_score(population, train_data)
+        logging.info("best population score: %.2f" % best_score)
 
         for gen in range(generations):
             logging.debug("generation: %d" % gen)
@@ -146,8 +192,10 @@ class EvolutionaryAlgorithm():
             for fit, ind in zip(fits, offspring):
                 ind.fitness.values = fit
             population = toolbox.select(offspring, k=len(population))
-            for individual in deap.tools.selBest(population, k=1):
-                logging.info("best score: %.2f" % self.__score(individual, train_data, True))
+            score = self.__get_best_score(population, train_data)
+            logging.info("best population score: %.2f" % score)
+            if score > best_score:
+                self.__save_population(population)
 
     def test(self, question, method_name, debug_top_items):
         pass

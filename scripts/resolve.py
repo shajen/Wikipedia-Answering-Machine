@@ -122,7 +122,7 @@ def start_evolutionary_algorithm(args, questions, method_name):
     train_questions_id = questions_id[:split_index]
     test_questions_id = questions_id[split_index:]
 
-    model = calculators.evolutionary_algorithm.EvolutionaryAlgorithm()
+    model = calculators.evolutionary_algorithm.EvolutionaryAlgorithm(args.evolutionary_algorithm_work_directory)
     model.train(train_questions_id, args.evolutionary_algorithm_methods_patterns, args.evolutionary_algorithm_population, args.evolutionary_algorithm_generations)
     for question in train_questions_id:
         model.test(question, '%s, dataset: train' % method_name, args.debug_top_items)
@@ -187,6 +187,7 @@ def run(*args):
     parser.add_argument("-ea_p", "--evolutionary_algorithm_population", help="population size", type=int, default=100)
     parser.add_argument("-ea_g", "--evolutionary_algorithm_generations", help="number of generations", type=int, default=100)
     parser.add_argument("-ea_mp", "--evolutionary_algorithm_methods_patterns", help="methods patterns used in model", type=str, default='', metavar="method1,method2")
+    parser.add_argument("-ea_wd", "--evolutionary_algorithm_work_directory", help="directory to save and read data during learing", type=str)
     parser.add_argument("-w2vf", "--word2vec_file", help="path to word2vec model", type=str, default='', metavar="file")
     parser.add_argument('-m', '--method', help="method name to make unique in database", type=str, default='', metavar="method")
     parser.add_argument("-dti", "--debug_top_items", help="print top n items in debug", type=int, default=3, metavar="int")
