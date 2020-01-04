@@ -115,7 +115,7 @@ def start(args, questions, method_name):
     logging.info('debug_top_items: %d' % args.debug_top_items)
     logging.info('topn: %d' % args.topn)
     if args.tfidf_models or args.vector_models:
-        start_callback_threads(args, questions, '%s, type: tfidf, title: %d, ngram: %d' % (method_name, args.title, args.ngram), resolve_questions_tf_idf, ())
+        start_callback_threads(args, questions, '%s, type: tfi, title: %d, ngram: %d' % (method_name, args.title, args.ngram), resolve_questions_tf_idf, ())
     if args.word2vec_model:
         data_loader = tools.data_loader.DataLoader(args.neural_model_questions_words_count, args.neural_model_articles_title_words_count, args.neural_model_articles_words_count, args.word2vec_file, 100)
         start_callback_threads(args, questions, '%s, type: w2v, topn: %03d, title: %d' % (method_name, args.topn, args.title), resolve_questions_word2vec, (data_loader,))

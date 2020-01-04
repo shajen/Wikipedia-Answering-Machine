@@ -16,7 +16,7 @@ class WeightComparator:
         self.__distance_function = distance_function
 
     def method(self):
-        return self.__method_name + (", type: %s_vector_%03d_neighbors" % (self.__distance_function, self.__sum_neighbors))
+        return self.__method_name + (", n: %03d, m: %s" % (self.__sum_neighbors, self.__distance_function))
 
     def ascending_order(self):
         return self.__ascending_order
@@ -48,7 +48,7 @@ class TfIdfWeightComparator(WeightComparator):
         self.__power_factor = power_factor
 
     def method(self):
-        return self.__method_name + (", pf: %.2f, type: tf_idf_%03d_neighbors" % (self.__power_factor, self.__sum_neighbors))
+        return self.__method_name + (", n: %03d, pf: %.2f" % (self.__sum_neighbors, self.__power_factor))
 
     def ascending_order(self):
         return True
