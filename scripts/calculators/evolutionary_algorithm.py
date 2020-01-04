@@ -142,8 +142,11 @@ class EvolutionaryAlgorithm():
         total_positions = 0
         for question_id in data:
             positions = self.__get_articles_positions(individual, question_id, data, debug)
-            if 1 in positions:
-                total_ones += 1
+            for i in range(1, 10):
+                if i in positions:
+                    total_ones += 1
+                else:
+                    break
             total_positions += len(positions)
         return total_ones / total_positions
 
