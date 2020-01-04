@@ -123,11 +123,7 @@ def start_evolutionary_algorithm(args, questions, method_name):
     test_questions_id = questions_id[split_index:]
 
     model = calculators.evolutionary_algorithm.EvolutionaryAlgorithm(args.evolutionary_algorithm_work_directory)
-    model.train(train_questions_id, args.evolutionary_algorithm_methods_patterns, args.evolutionary_algorithm_population, args.evolutionary_algorithm_generations)
-    for question in train_questions_id:
-        model.test(question, '%s, dataset: train' % method_name, args.debug_top_items)
-    for question in test_questions_id:
-        model.test(question, '%s, dataset: test' % method_name, args.debug_top_items)
+    model.run(train_questions_id, test_questions_id, method_name, args.debug_top_items, args.evolutionary_algorithm_methods_patterns, args.evolutionary_algorithm_population, args.evolutionary_algorithm_generations)
 
 def start(args, questions, method_name):
     logging.info('questions: %d' % len(questions))

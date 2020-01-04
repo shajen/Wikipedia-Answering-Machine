@@ -81,35 +81,40 @@ class EvolutionaryAlgorithm():
         corrected_articles_id = list(Answer.objects.filter(question_id=question_id).values_list('article_id', flat=True))
         return (articles_id, np.transpose(articles_data), corrected_articles_id)
 
-    def __prepare_for_training(self, questions_id, methods_id, methods_id_position, methods_id_name):
+    def __prepare_dataset(self, questions_id, dataset, methods_id, methods_id_position, methods_id_name):
         try:
-            train_data = self.__load_data('train_data')
-            logging.info('loading train data succesful')
-            return train_data
+            data = self.__load_data(dataset)
+            logging.info('loading %s succesful' % dataset)
+            logging.info('%s size: %d' % (dataset, len(data)))
+            return data
         except:
-            logging.info('generating new train data')
+            logging.info('generating new %s' % dataset)
 
         logging.info("methods: %d" % len(methods_id))
-        train_data = {}
+        data = {}
 
         current = 0
         total = len(questions_id)
         step = max(1, int(total / 100))
         for question_id in questions_id:
-            train_data[question_id] = self.__prepare_question(question_id, methods_id, methods_id_position, methods_id_name)
+            data[question_id] = self.__prepare_question(question_id, methods_id, methods_id_position, methods_id_name)
             current += 1
             if current % step == 0:
                 logging.debug("progress: %d/%d (%.2f %%)" % (current, total, current / total * 100))
 
-        self.__save_data(train_data, 'train_data')
-        return train_data
+        self.__save_data(data, dataset)
+        return data
 
-    def __get_articles_positions(self, individual, question_id, train_data, debug):
+    def __get_articles_scores(self, individual, question_id, data):
+        (articles_id, articles_data, corrected_articles_id) = data[question_id]
+        scores = np.sum(articles_data * individual, axis=1)
+        return (articles_id, scores, corrected_articles_id)
+
+    def __get_articles_positions(self, individual, question_id, data, debug):
         # if debug:
         #     logging.debug("question: %d" % question_id)
         #     logging.debug("corrected articles:")
-        (articles_id, articles_data, corrected_articles_id) = train_data[question_id]
-        scores = np.sum(articles_data * individual, axis=1)
+        (articles_id, scores, corrected_articles_id) = self.__get_articles_scores(individual, question_id, data)
         positions = []
         for article_id in corrected_articles_id:
             position = bisect.bisect_left(articles_id, article_id)
@@ -123,14 +128,14 @@ class EvolutionaryAlgorithm():
             #     logging.debug("  article: %d, position: %d" % (article_id, position))
         return positions
 
-    def __score(self, individual, train_data, debug):
+    def __score(self, individual, data, debug):
         individual = np.array(individual)
         total_ones = 0
-        for question_id in train_data:
-            positions = self.__get_articles_positions(individual, question_id, train_data, debug)
+        for question_id in data:
+            positions = self.__get_articles_positions(individual, question_id, data, debug)
             if 1 in positions:
                 total_ones += 1
-        return total_ones / len(train_data)
+        return total_ones / len(data)
 
     def __save_data(self, data, name):
         filename = '%s/%s.pkl' % (self.__workdir, name)
@@ -155,13 +160,14 @@ class EvolutionaryAlgorithm():
         data = dict(population=population, rndstate=random.getstate())
         self.__save_data(data, 'population')
 
-    def __get_best_score(self, population, train_data):
+    def __get_best_score(self, population, data):
         individual = deap.tools.selBest(population, k=1)[0]
-        return self.__score(individual, train_data, True)
+        return self.__score(individual, data, True)
 
-    def train(self, questions_id, methods_patterns, population, generations):
+    def run(self, train_questions_id, test_questions_id, method_name, debug_top_items, methods_patterns, population, generations):
         (methods_id, methods_id_position, methods_id_name) = self.__get_methods(methods_patterns)
-        train_data = self.__prepare_for_training(questions_id, methods_id, methods_id_position, methods_id_name)
+        train_data = self.__prepare_dataset(train_questions_id, 'train_data', methods_id, methods_id_position, methods_id_name)
+        test_data = self.__prepare_dataset(train_questions_id, 'test_data', methods_id, methods_id_position, methods_id_name)
         deap.creator.create("Fitness", deap.base.Fitness, weights=(1.0,))
         deap.creator.create("Individual", list, fitness=deap.creator.Fitness)
 
@@ -196,6 +202,3 @@ class EvolutionaryAlgorithm():
             logging.info("best population score: %.2f" % score)
             if score > best_score:
                 self.__save_population(population)
-
-    def test(self, question, method_name, debug_top_items):
-        pass
