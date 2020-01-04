@@ -31,10 +31,13 @@ class EvolutionaryAlgorithm():
             methods_id_name[method_id] = Method.objects.get(id=method_id).name
         return (methods_id, methods_id_position, methods_id_name)
 
+    def __is_smaller_first(self, method_name):
+        return 'w2v' in method_name or ('tfi' in method_name and ('cosine' in method_name or 'cityblock' in method_name or 'euclidean' in method_name))
+
     def __normalise(self, data, method_name):
-        max = data.max()
+        max = np.nanmax(data)
         if max != 0.0:
-            if 'w2v' in method_name:
+            if self.__is_smaller_first(method_name):
                 data /= max
                 data *= -1
                 data += + 1
@@ -49,11 +52,9 @@ class EvolutionaryAlgorithm():
             articles_id_position[articles_id[i]] = articles_positions[i]
 
         articles_data = np.zeros(shape=(len(methods_id), len(articles_id)), dtype=np.float32)
+        articles_data.fill(np.nan)
         answers = Answer.objects.filter(question_id=question_id)
         for method_id in methods_id:
-            if 'w2v' in methods_id_name[method_id]:
-                method_index = methods_id_position[method_id]
-                articles_data[method_index].fill(1.0)
             corrected_articles_position = {}
             for answer in answers:
                 try:
@@ -67,9 +68,9 @@ class EvolutionaryAlgorithm():
                     continue
                 article_index = articles_id_position[article_id]
                 method_index = methods_id_position[method_id]
-                if weight != 100000.0: #word2vec
-                    articles_data[method_index][article_index] = weight
+                articles_data[method_index][article_index] = weight
             self.__normalise(articles_data[method_index], methods_id_name[method_id])
+        articles_data = np.nan_to_num(articles_data)
         # self.__train_data[question_id] = (articles_id, np.transpose(articles_data))
         # logging.debug("question: %d" % question_id)
         # logging.debug("articles: %d" % len(articles_id))
