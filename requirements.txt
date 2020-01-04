@@ -15,3 +15,4 @@ graphviz
 tensorflow
 more_itertools
 SharedArray
+deap

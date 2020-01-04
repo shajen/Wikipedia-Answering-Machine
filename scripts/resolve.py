@@ -12,6 +12,7 @@ import sys
 sys.path.append(os.path.dirname(__file__))
 
 import calculators.deep_averaging_neural_weight_calculator
+import calculators.evolutionary_algorithm
 import calculators.neural_weight_calculator
 import calculators.tf_idf_weight_calculator
 import calculators.weight_comparator
@@ -92,11 +93,11 @@ def start_neural(args, questions, method_name, model_class):
     logging.info("articles_title_words_count: %d" % args.neural_model_articles_title_words_count)
     logging.info("articles_words_count: %d" % args.neural_model_articles_words_count)
     logging.info("good_bad_ratio: %d" % args.neural_model_good_bad_ratio)
-    logging.info("train_data_percentage: %.2f" % args.neural_model_train_data_percentage)
+    logging.info("train_data_percentage: %.2f" % args.train_data_percentage)
     logging.info("epoch: %d" % args.neural_model_epoch)
     logging.info('method_name: %s' % method_name)
 
-    split_index = int(len(questions) * args.neural_model_train_data_percentage)
+    split_index = int(len(questions) * args.train_data_percentage)
     train_questions = questions[:split_index]
     test_questions = questions[split_index:]
 
@@ -108,6 +109,25 @@ def start_neural(args, questions, method_name, model_class):
         model.prepare_for_testing()
         resolve_questions_neural(args, train_questions, '%s, dateset: train' % method_name, model)
         resolve_questions_neural(args, test_questions, '%s, dateset: test' % method_name, model)
+
+def start_evolutionary_algorithm(args, questions, method_name):
+    logging.info("train_data_percentage: %.2f" % args.train_data_percentage)
+    logging.info("population: %d" % args.evolutionary_algorithm_population)
+    logging.info("generations: %d" % args.evolutionary_algorithm_generations)
+    method_name = "%s, p: %04d, g: %04d" % (method_name, args.evolutionary_algorithm_population, args.evolutionary_algorithm_generations)
+    logging.info('method_name: %s' % method_name)
+
+    questions_id = list(map(lambda question: question.id, questions))
+    split_index = int(len(questions_id) * args.train_data_percentage)
+    train_questions_id = questions_id[:split_index]
+    test_questions_id = questions_id[split_index:]
+
+    model = calculators.evolutionary_algorithm.EvolutionaryAlgorithm()
+    model.train(train_questions_id, args.evolutionary_algorithm_methods_patterns, args.evolutionary_algorithm_population, args.evolutionary_algorithm_generations)
+    for question in train_questions_id:
+        model.test(question, '%s, dataset: train' % method_name, args.debug_top_items)
+    for question in test_questions_id:
+        model.test(question, '%s, dataset: test' % method_name, args.debug_top_items)
 
 def start(args, questions, method_name):
     logging.info('questions: %d' % len(questions))
@@ -123,6 +143,8 @@ def start(args, questions, method_name):
         start_neural(args, questions, '%s, type: cnn, topn: %03d' % (method_name, args.topn), calculators.neural_weight_calculator.NeuralWeightCalculator)
     if args.deep_averaging_network:
         start_neural(args, questions, '%s, type: dan, topn: %03d' % (method_name, args.topn), calculators.deep_averaging_neural_weight_calculator.DeepAveragingNeuralWeightCalculator)
+    if args.evolutionary_algorithm:
+        start_evolutionary_algorithm(args, questions, '%s, type: ean' % (method_name))
     logging.info('finish')
 
 def get_method_name(args):
@@ -153,14 +175,18 @@ def run(*args):
     parser.add_argument("-w2vm", "--word2vec_model", help="use word2vec model", action='store_true')
     parser.add_argument("-cnn", "--convolution_neural_network", help="use onvolution neural network", action='store_true')
     parser.add_argument("-dan", "--deep_averaging_network", help="use deep averaging network", action='store_true')
+    parser.add_argument("-tdp", "--train_data_percentage", help="percentage of train data", type=float, default=0.8)
     parser.add_argument("-nm_qwc", "--neural_model_questions_words_count", help="use first n words from questions", type=int, default=20)
     parser.add_argument("-nm_atwc", "--neural_model_articles_title_words_count", help="use first n words from articles title", type=int, default=20)
     parser.add_argument("-nm_awc", "--neural_model_articles_words_count", help="use first n words from articles", type=int, default=100)
     parser.add_argument("-nm_gbr", "--neural_model_good_bad_ratio", help="ratio between good and bad articles", type=int, default=3)
-    parser.add_argument("-nm_tdp", "--neural_model_train_data_percentage", help="percentage of train data", type=float, default=0.8)
     parser.add_argument("-nm_wd", "--neural_model_work_directory", help="directory to save and read data during learing", type=str)
     parser.add_argument("-nm_e", "--neural_model_epoch", help="train n epoch", type=int, default=10)
     parser.add_argument("-nm_ot", "--neural_model_only_train", help="train models without testing", action='store_true')
+    parser.add_argument("-ea", "--evolutionary_algorithm", help="enable evolutionary algorithm model", action='store_true')
+    parser.add_argument("-ea_p", "--evolutionary_algorithm_population", help="population size", type=int, default=100)
+    parser.add_argument("-ea_g", "--evolutionary_algorithm_generations", help="number of generations", type=int, default=100)
+    parser.add_argument("-ea_mp", "--evolutionary_algorithm_methods_patterns", help="methods patterns used in model", type=str, default='', metavar="method1,method2")
     parser.add_argument("-w2vf", "--word2vec_file", help="path to word2vec model", type=str, default='', metavar="file")
     parser.add_argument('-m', '--method', help="method name to make unique in database", type=str, default='', metavar="method")
     parser.add_argument("-dti", "--debug_top_items", help="print top n items in debug", type=int, default=3, metavar="int")
