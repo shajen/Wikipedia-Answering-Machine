@@ -111,11 +111,14 @@ class EvolutionaryAlgorithm():
         return (articles_id, scores, corrected_articles_id)
 
     def __get_articles_positions(self, individual, question_id, data, debug):
-        # if debug:
-        #     logging.debug("question: %d" % question_id)
-        #     logging.debug("corrected articles:")
         (articles_id, scores, corrected_articles_id) = self.__get_articles_scores(individual, question_id, data)
         positions = []
+        # if debug:
+        #     logging.debug("question: %d" % question_id)
+        #     logging.debug(scores)
+        #     logging.debug(scores.max())
+        #     logging.debug(scores.min())
+        #     logging.debug("corrected articles:")
         for article_id in corrected_articles_id:
             position = bisect.bisect_left(articles_id, article_id)
             article_score = scores[position]
@@ -125,17 +128,21 @@ class EvolutionaryAlgorithm():
                     position += 1
             positions.append(position)
             # if debug:
-            #     logging.debug("  article: %d, position: %d" % (article_id, position))
+            #     logging.debug("  article: %d, position: %d, weight: %.2f" % (article_id, position, article_score))
+        # if debug:
+        #     logging.debug('-' * 80)
         return positions
 
     def __score(self, individual, data, debug):
         individual = np.array(individual)
         total_ones = 0
+        total_positions = 0
         for question_id in data:
             positions = self.__get_articles_positions(individual, question_id, data, debug)
             if 1 in positions:
                 total_ones += 1
-        return total_ones / len(data)
+            total_positions += len(positions)
+        return total_ones / total_positions
 
     def __save_data(self, data, name):
         filename = '%s/%s.pkl' % (self.__workdir, name)
@@ -193,7 +200,7 @@ class EvolutionaryAlgorithm():
         logging.info("best population score: %.2f, dataset: test" % self.__get_best_score(population, test_data))
 
         for gen in range(generations):
-            logging.debug("generation: %d" % gen)
+            logging.debug("generation: %d/%d" % (gen, generations))
             offspring = deap.algorithms.varAnd(population, toolbox, cxpb=0.5, mutpb=0.1)
             fits = toolbox.map(toolbox.evaluate, offspring)
             for fit, ind in zip(fits, offspring):
