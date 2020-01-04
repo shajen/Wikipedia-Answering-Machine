@@ -7,8 +7,9 @@ import deap.creator
 import deap.tools
 import logging
 import numpy as np
-import random
 import pickle
+import random
+import tools.results_presenter
 
 class EvolutionaryAlgorithm():
     def __init__(self, workdir):
@@ -41,7 +42,7 @@ class EvolutionaryAlgorithm():
                 data /= max
 
     def __prepare_question(self, question_id, methods_id, methods_id_position, methods_id_name):
-        articles_id = Rate.objects.filter(question_id=question_id, method_id__in=methods_id).distinct().values_list('article_id', flat=True)
+        articles_id = list(Rate.objects.filter(question_id=question_id, method_id__in=methods_id).distinct().values_list('article_id', flat=True))
         articles_positions = np.argsort(np.argsort(articles_id))
         articles_id_position = {}
         for i in range(0, len(articles_id)):
@@ -171,6 +172,15 @@ class EvolutionaryAlgorithm():
         individual = deap.tools.selBest(population, k=1)[0]
         return self.__score(individual, data, True)
 
+    def __solve(self, population, data, method_name, debug_top_items):
+        method, created = Method.objects.get_or_create(name=method_name)
+        individual = deap.tools.selBest(population, k=1)[0]
+        for question_id in data:
+            question = Question.objects.get(id=question_id)
+            if not tools.results_presenter.ResultsPresenter.is_already_solved(question, method.name):
+                (articles_id, scores, corrected_articles_id) = self.__get_articles_scores(individual, question_id, data)
+                tools.results_presenter.ResultsPresenter.present(question, articles_id, scores, method, debug_top_items, False)
+
     def run(self, train_questions_id, test_questions_id, method_name, debug_top_items, methods_patterns, population, generations):
         (methods_id, methods_id_position, methods_id_name) = self.__get_methods(methods_patterns)
         train_data = self.__prepare_dataset(train_questions_id, 'train_data', methods_id, methods_id_position, methods_id_name)
@@ -211,3 +221,5 @@ class EvolutionaryAlgorithm():
             logging.info("best population score: %.2f, dataset: test" % self.__get_best_score(population, test_data))
             if score > best_score:
                 self.__save_population(population)
+        self.__solve(population, train_data, '%s, dataset: train' % method_name, debug_top_items)
+        self.__solve(population, test_data, '%s, dataset: test' % method_name, debug_top_items)
