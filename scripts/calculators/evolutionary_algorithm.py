@@ -167,7 +167,7 @@ class EvolutionaryAlgorithm():
     def run(self, train_questions_id, test_questions_id, method_name, debug_top_items, methods_patterns, population, generations):
         (methods_id, methods_id_position, methods_id_name) = self.__get_methods(methods_patterns)
         train_data = self.__prepare_dataset(train_questions_id, 'train_data', methods_id, methods_id_position, methods_id_name)
-        test_data = self.__prepare_dataset(train_questions_id, 'test_data', methods_id, methods_id_position, methods_id_name)
+        test_data = self.__prepare_dataset(test_questions_id, 'test_data', methods_id, methods_id_position, methods_id_name)
         deap.creator.create("Fitness", deap.base.Fitness, weights=(1.0,))
         deap.creator.create("Individual", list, fitness=deap.creator.Fitness)
 
@@ -189,7 +189,8 @@ class EvolutionaryAlgorithm():
             logging.info('create new population')
 
         best_score = self.__get_best_score(population, train_data)
-        logging.info("best population score: %.2f" % best_score)
+        logging.info("best population score: %.2f, dataset: train" % best_score)
+        logging.info("best population score: %.2f, dataset: test" % self.__get_best_score(population, test_data))
 
         for gen in range(generations):
             logging.debug("generation: %d" % gen)
@@ -199,6 +200,7 @@ class EvolutionaryAlgorithm():
                 ind.fitness.values = fit
             population = toolbox.select(offspring, k=len(population))
             score = self.__get_best_score(population, train_data)
-            logging.info("best population score: %.2f" % score)
+            logging.info("best population score: %.2f, dataset: train" % score)
+            logging.info("best population score: %.2f, dataset: test" % self.__get_best_score(population, test_data))
             if score > best_score:
                 self.__save_population(population)
