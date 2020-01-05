@@ -211,19 +211,19 @@ class EvolutionaryAlgorithm():
             logging.info('create new population')
 
         best_score = self.__get_best_score(population, train_data)
-        logging.info("best population score: %.2f, dataset: train" % best_score)
-        logging.info("best population score: %.2f, dataset: test" % self.__get_best_score(population, test_data))
+        logging.info("best population score: %.4f, dataset: train" % best_score)
+        logging.info("best population score: %.4f, dataset: test" % self.__get_best_score(population, test_data))
 
         for gen in range(generations):
-            logging.debug("generation: %d/%d" % (gen, generations))
+            logging.debug("generation: %d/%d" % (gen+1, generations))
             offspring = deap.algorithms.varAnd(population, toolbox, cxpb=0.5, mutpb=0.1)
             fits = toolbox.map(toolbox.evaluate, offspring)
             for fit, ind in zip(fits, offspring):
                 ind.fitness.values = fit
             population = toolbox.select(offspring, k=len(population))
             score = self.__get_best_score(population, train_data)
-            logging.info("best population score: %.2f, dataset: train" % score)
-            logging.info("best population score: %.2f, dataset: test" % self.__get_best_score(population, test_data))
+            logging.info("best population score: %.4f, dataset: train" % score)
+            logging.info("best population score: %.4f, dataset: test" % self.__get_best_score(population, test_data))
             if score > best_score:
                 self.__save_population(population)
         self.__solve(population, train_data, '%s, dataset: train' % method_name, debug_top_items)
