@@ -50,5 +50,5 @@ def methods(request):
     order_by = request.GET.get('order_by', 'name')
     page = request.GET.get('page')
     objects_per_page = request.GET.get('objects_per_page', __OBJECTS_PER_PAGE)
-    paginator = Paginator(Method.objects.order_by(order_by).all(), objects_per_page)
+    paginator = Paginator(Method.objects.filter(is_enabled=True).order_by(order_by).all(), objects_per_page)
     return render(request, 'data/methods.html', {'objects': paginator.get_page(page), 'total_count': paginator.count, 'order_by' : order_by })

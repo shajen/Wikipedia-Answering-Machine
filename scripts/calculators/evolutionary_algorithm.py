@@ -16,7 +16,7 @@ class EvolutionaryAlgorithm():
         self.__workdir = workdir
 
     def __get_methods(self, methods_patterns):
-        methods_id = set(Method.objects.order_by('id').values_list('id', flat=True))
+        methods_id = set(Method.objects.filter(is_enabled=True).values_list('id', flat=True))
         if methods_patterns:
             for pattern in methods_patterns.split(','):
                 methods_id = methods_id & set(Method.objects.filter(name__contains=pattern).values_list('id', flat=True))
