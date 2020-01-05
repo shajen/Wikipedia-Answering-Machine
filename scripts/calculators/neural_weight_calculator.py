@@ -240,7 +240,7 @@ class NeuralWeightCalculator():
         return model
 
     def _model_name(self):
-        return 'model'
+        return 'cnn_model'
 
     def __load_model(self):
         models_files = [f for f in os.listdir(self.__workdir) if re.match(r'%s_.*.h5' % self._model_name(), f)]
