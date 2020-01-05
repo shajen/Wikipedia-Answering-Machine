@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+
+{% block title %}
+Method ({{ method.id }}): {{ method.name }}
+{% endblock %}
+
+{% block content %}
+<div>
+  <h3>Method {{ method.id }}</h3>
+  <h4>{{ method.name }}</h4>
+</div>
+{% endblock %}

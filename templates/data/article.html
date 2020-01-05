@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+
+{% block title %}
+Article ({{ article.id }}): {{ article.title }}
+{% endblock %}
+
+{% block content %}
+<div>
+  <h3>Article {{ article.id }}</h3>
+  <h4>{{ article.title }}</h4>
+</div>
+
+<h3>Questions:</h3>
+<table class="table table-striped table-bordered table-hover">
+  <tr>
+    <th class="col-md-1">ID</th>
+    <th class="col-md-9">Title</th>
+    <th class="col-md-2">Length</th>
+  </tr>
+  {% for answer in answers %}
+    <tr>
+      <td><a href="{% url 'question' answer.question.id %}">{{ answer.question.id }}</a></td>
+      <td>{{ answer.question.name }}</td>
+      <td>{{ answer.question.words_count }}</td>
+    </tr>
+  {% endfor %}
+</table>
+{% endblock %}

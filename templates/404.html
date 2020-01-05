@@ -1,0 +1,11 @@
+{% extends 'base.html' %}
+
+{% block title %}
+{{ exception | safe }}
+{% endblock %}
+
+{% block content %}
+<div>
+  <h2>{{ exception | safe }}<h2>
+</div>
+{% endblock %}

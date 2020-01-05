@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+
+{% block title %}
+Articles
+{% endblock %}
+
+{% block content %}
+<div>
+  <h3>Articles count: {{ total_count }}</h3>
+</div>
+{% include "paginator.html" %}
+<table class="table table-striped table-bordered table-hover">
+  <tr>
+    <th class="col-md-1">
+      <a href="?order_by=id"><span class="glyphicon glyphicon-sort-by-attributes"></span></a>
+      ID
+      <a href="?order_by=-id"><span class="glyphicon glyphicon-sort-by-attributes-alt"></span></a>
+    </th>
+    <th class="col-md-7">
+      <a href="?order_by=title"><span class="glyphicon glyphicon-sort-by-attributes"></span></a>
+      Title
+      <a href="?order_by=-title"><span class="glyphicon glyphicon-sort-by-attributes-alt"></span></a>
+    </th>
+    <th class="col-md-2">
+      <a href="?order_by=title_words_count"><span class="glyphicon glyphicon-sort-by-attributes"></span></a>
+      Title length
+      <a href="?order_by=-title_words_count"><span class="glyphicon glyphicon-sort-by-attributes-alt"></span></a>
+    </th>
+    <th class="col-md-2">
+      <a href="?order_by=content_words_count"><span class="glyphicon glyphicon-sort-by-attributes"></span></a>
+      Content length
+      <a href="?order_by=-content_words_count"><span class="glyphicon glyphicon-sort-by-attributes-alt"></span></a>
+    </th>
+  </tr>
+  {% for article in objects %}
+    <tr>
+      <td><a href="{% url 'article' article.id %}">{{ article.id }}</a></td>
+      <td>{{ article.title }}</td>
+      <td>{{ article.title_words_count }}</td>
+      <td>{{ article.content_words_count }}</td>
+    </tr>
+  {% endfor %}
+</table>
+{% include "paginator.html" %}
+{% endblock %}
