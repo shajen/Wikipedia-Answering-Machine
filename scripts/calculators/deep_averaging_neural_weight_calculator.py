@@ -13,5 +13,5 @@ class DeepAveragingNeuralWeightCalculator(calculators.neural_weight_calculator.N
         x = tf.keras.layers.Dense(1, activation='sigmoid', name='weight')(x)
         return x
 
-    def _model_name(self):
+    def model_name(self):
         return 'dan_model'

@@ -235,14 +235,14 @@ class NeuralWeightCalculator():
 
     def __create_model(self):
         model = self.__create_distances_model(NeuralWeightCalculator.__FILTERS, False)
-        tf.keras.utils.plot_model(model, '%s/%s.png' % (self.__workdir, self._model_name()), show_shapes=True, expand_nested=True)
+        tf.keras.utils.plot_model(model, '%s/%s.png' % (self.__workdir, self.model_name()), show_shapes=True, expand_nested=True)
         return model
 
-    def _model_name(self):
+    def model_name(self):
         return 'cnn_model'
 
     def __load_model(self):
-        models_files = [f for f in os.listdir(self.__workdir) if re.match(r'%s_.*.h5' % self._model_name(), f)]
+        models_files = [f for f in os.listdir(self.__workdir) if re.match(r'%s_.*.h5' % self.model_name(), f)]
         best_model_file = sorted(models_files)[-1]
         logging.info('loading model from file: %s' % best_model_file)
         model = tf.keras.models.load_model('%s/%s' % (self.__workdir, best_model_file))
@@ -254,7 +254,7 @@ class NeuralWeightCalculator():
         if epoch == 0:
             return
 
-        logging.info('training: %s' % self._model_name())
+        logging.info('training: %s' % self.model_name())
 
         try:
             model = self.__load_model()
@@ -274,7 +274,7 @@ class NeuralWeightCalculator():
             except:
                 pass
 
-        save_callback = tf.keras.callbacks.ModelCheckpoint(filepath='%s/%s_{val_accuracy:.4f}.h5' % (self.__workdir, self._model_name()), save_best_only=True, monitor='val_accuracy', verbose=0)
+        save_callback = tf.keras.callbacks.ModelCheckpoint(filepath='%s/%s_{val_accuracy:.4f}.h5' % (self.__workdir, self.model_name()), save_best_only=True, monitor='val_accuracy', verbose=0)
         test_callback = tf.keras.callbacks.LambdaCallback(on_epoch_end=on_epoch_end)
 
         model.compile(
@@ -344,7 +344,7 @@ class NeuralWeightCalculator():
             logging.debug("    %s" % str(i.shape))
 
     def prepare_for_testing(self):
-        logging.info('prepare for testing: %s' % self._model_name())
+        logging.info('prepare for testing: %s' % self.model_name())
         model = self.__load_model()
         (self.__questions_model, articles_model) = self.__extract_models(model)
         self.__bypass_model = self.__create_distances_model(NeuralWeightCalculator.__FILTERS, True)
@@ -373,5 +373,5 @@ class NeuralWeightCalculator():
         logging.info('articles id: %s' % str(self.__articles_id.shape))
         logging.info('articles output: %s' % str(self.__articles_output.shape))
 
-    def test(self, question_id, method_name):
-        self.__full_test_questions(method_name, question_id, self.__articles_id, self.__articles_output, self.__questions_model, self.__bypass_model)
+    def test(self, question, method_name):
+        self.__full_test_questions(method_name, question.id, self.__articles_id, self.__articles_output, self.__questions_model, self.__bypass_model)

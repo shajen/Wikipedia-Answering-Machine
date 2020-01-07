@@ -21,20 +21,6 @@ import tools.data_loader
 import tools.logger
 import tools.results_presenter
 
-def split_questions(questions, args):
-    values = list(map(lambda n: int(n), args.dataset_proportion.split(':')))
-    train_dataset_count = round(len(questions) * values[0] / sum(values))
-    validate_dataset_count = round(len(questions) * values[1] / sum(values))
-    train_dataset = questions[:train_dataset_count]
-    validate_dataset = questions[train_dataset_count:train_dataset_count+validate_dataset_count]
-    test_dataset = questions[train_dataset_count+validate_dataset_count:]
-    logging.info('train dateset size    : %d' % len(train_dataset))
-    logging.info('validate dateset size : %d' % len(validate_dataset))
-    logging.info('test dateset size     : %d' % len(test_dataset))
-    logging.info('total questions size  : %d' % len(questions))
-    logging.info('dataset sum size      : %d' % (len(train_dataset) + len(validate_dataset) + len(test_dataset)))
-    return (train_dataset, validate_dataset, test_dataset)
-
 def resolve_questions_tf_idf(args, questions_queue, method):
     neighbors = list(map(lambda x: int(x), args.neighbors.split(',')))
     minimal_word_idf_weights = list(map(lambda x: float(x), args.minimal_word_idf_weights.split(',')))
@@ -97,25 +83,33 @@ def start_callback_threads(args, questions, method_name, callback, callback_argu
         for thread in threads:
             thread.terminate()
 
-def start_neural(args, questions, method_name, model_class, data_loader):
-    logging.info('method: %s' % method_name)
+def split_questions(questions, args):
+    values = list(map(lambda n: int(n), args.dataset_proportion.split(':')))
+    train_dataset_count = round(len(questions) * values[0] / sum(values))
+    validate_dataset_count = round(len(questions) * values[1] / sum(values))
+    train_dataset = questions[:train_dataset_count]
+    validate_dataset = questions[train_dataset_count:train_dataset_count+validate_dataset_count]
+    test_dataset = questions[train_dataset_count+validate_dataset_count:]
+    logging.info('train dateset size    : %d' % len(train_dataset))
+    logging.info('validate dateset size : %d' % len(validate_dataset))
+    logging.info('test dateset size     : %d' % len(test_dataset))
+    logging.info('total questions size  : %d' % len(questions))
+    logging.info('dataset sum size      : %d' % (len(train_dataset) + len(validate_dataset) + len(test_dataset)))
+    return (train_dataset, validate_dataset, test_dataset)
 
+def start_learning_model(args, questions, model, method_name):
+    logging.info('start learning model: %s' % model.model_name())
+    logging.info('method: %s' % method_name)
     (train_questions, validate_questions, test_questions) = split_questions(questions, args)
-    model = model_class(data_loader, args.debug_top_items, args.cache_directory, args.learning_model_questions_words_count, args.learning_model_articles_title_words_count, args.learning_model_articles_content_words_count, args.neural_model_good_bad_ratio)
+    logging.info('start training model: %s' % model.model_name())
     model.train(train_questions, validate_questions, test_questions, args.epoch)
     if not args.disable_testing:
+        logging.info('prepare for testing model: %s' % model.model_name())
         model.prepare_for_testing()
+        logging.info('testing model: %s' % model.model_name())
         for question in questions:
             if not tools.results_presenter.ResultsPresenter.is_already_solved(question, method_name):
-                model.test(question.id, method_name)
-
-def start_evolutionary_algorithm(args, questions, method_name):
-    logging.info('method: %s' % method_name)
-    questions_id = list(map(lambda question: question.id, questions))
-    (train_questions_id, validate_questions_id, test_questions_id) = split_questions(questions_id, args)
-
-    model = calculators.evolutionary_algorithm.EvolutionaryAlgorithm(args.cache_directory)
-    model.run(train_questions_id, test_questions_id, method_name, args.debug_top_items, args.evolutionary_algorithm_methods_patterns, args.evolutionary_algorithm_population, args.epoch)
+                model.test(question, method_name)
 
 def start(args, questions, method_name):
     learning_model_count = (args.learning_model_questions_words_count, args.learning_model_articles_title_words_count, args.learning_model_articles_content_words_count)
@@ -127,11 +121,14 @@ def start(args, questions, method_name):
     if args.word2vec_model:
         start_callback_threads(args, questions, '%s, type: w2v, topn: %03d, title: %d' % (method_name, args.topn, args.title), resolve_questions_word2vec, (data_loader,))
     if args.convolution_neural_network:
-        start_neural(args, questions, '%s, type: cnn, topn: %03d' % (method_name, args.topn), calculators.neural_weight_calculator.NeuralWeightCalculator, data_loader)
+        model = calculators.neural_weight_calculator.NeuralWeightCalculator(data_loader, args.debug_top_items, args.cache_directory, args.learning_model_questions_words_count, args.learning_model_articles_title_words_count, args.learning_model_articles_content_words_count, args.neural_model_good_bad_ratio)
+        start_learning_model(args, questions, model, '%s, type: cnn' % (method_name))
     if args.deep_averaging_network:
-        start_neural(args, questions, '%s, type: dan, topn: %03d' % (method_name, args.topn), calculators.deep_averaging_neural_weight_calculator.DeepAveragingNeuralWeightCalculator, data_loader)
+        model = calculators.deep_averaging_neural_weight_calculator.DeepAveragingNeuralWeightCalculator(data_loader, args.debug_top_items, args.cache_directory, args.learning_model_questions_words_count, args.learning_model_articles_title_words_count, args.learning_model_articles_content_words_count, args.neural_model_good_bad_ratio)
+        start_learning_model(args, questions, model, '%s, type: dan' % (method_name))
     if args.evolutionary_algorithm:
-        start_evolutionary_algorithm(args, questions, '%s, type: ean, p: %04d' % (method_name, args.evolutionary_algorithm_population))
+        model = calculators.evolutionary_algorithm.EvolutionaryAlgorithm(args.debug_top_items, args.cache_directory, args.evolutionary_algorithm_methods_patterns, args.evolutionary_algorithm_population)
+        start_learning_model(args, questions, model, '%s, type: ean, p: %04d' % (method_name, args.evolutionary_algorithm_population))
     logging.info('finish')
 
 def get_method_name(args):
