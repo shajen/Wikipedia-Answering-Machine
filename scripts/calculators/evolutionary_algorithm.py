@@ -90,15 +90,7 @@ class EvolutionaryAlgorithm():
         corrected_articles_id = list(Answer.objects.filter(question_id=question_id).values_list('article_id', flat=True))
         return (articles_id, np.transpose(articles_data), corrected_articles_id)
 
-    def __prepare_dataset(self, questions, dataset, methods_id, methods_id_position, methods_id_name):
-        try:
-            data = self.__load_data('ea_' + dataset)
-            logging.info('loading %s succesful' % dataset)
-            logging.info('%s size: %d' % (dataset, len(data)))
-            return data
-        except:
-            logging.info('generating new %s' % dataset)
-
+    def __generate_dataset(self, questions, dataset, methods_id, methods_id_position, methods_id_name):
         logging.info("methods: %d" % len(methods_id))
         data = {}
 
@@ -112,8 +104,22 @@ class EvolutionaryAlgorithm():
             if current % step == 0:
                 logging.debug("progress: %d/%d (%.2f %%)" % (current, total, current / total * 100))
 
-        self.__save_data(data, 'ea_' + dataset)
         return data
+
+    def __load_dataset(self, dataset):
+        return self.__load_data('ea_' + dataset)
+
+    def __prepare_dataset(self, questions, dataset, methods_id, methods_id_position, methods_id_name):
+        try:
+            data = self.__load_dataset(dataset)
+            logging.info('loading %s succesful' % dataset)
+            logging.info('%s size: %d' % (dataset, len(data)))
+            return data
+        except:
+            logging.info('generating new %s' % dataset)
+            data = self.__generate_dataset(questions, dataset, methods_id, methods_id_position, methods_id_name)
+            self.__save_data(data, 'ea_' + dataset)
+            return data
 
     def __get_articles_scores(self, individual, question_id, data):
         (articles_id, articles_data, corrected_articles_id) = data[question_id]
@@ -247,6 +253,12 @@ class EvolutionaryAlgorithm():
 
     def prepare_for_testing(self):
         self.__population = self.__load_population()
+        train_data = self.__load_dataset('train_data')
+        validate_data = self.__load_dataset('validate_data')
+        test_data = self.__load_dataset('test_data')
+        self.__test_dataset(self.__population, train_data, 'train')
+        self.__test_dataset(self.__population, validate_data, 'validate')
+        self.__test_dataset(self.__population, test_data, 'test')
         (self.__methods_id, self.__methods_id_position, self.__methods_id_name) = self.__get_methods(self.__methods_patterns)
 
     def test(self, question, method_name):
