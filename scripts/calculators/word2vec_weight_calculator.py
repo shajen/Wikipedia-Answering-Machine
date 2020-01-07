@@ -5,17 +5,6 @@ import numpy as np
 import scipy.spatial
 from tools.results_presenter import ResultsPresenter
 
-class Word2VecModel():
-    def  __init__(self, word2vec_file):
-        logging.info('loading word2vec model')
-        self.__word2vec_model = gensim.models.KeyedVectors.load(word2vec_file)
-
-    def most_similar(self, word, **kwargs):
-        return self.__word2vec_model.most_similar(word, **kwargs)
-
-    def get_vector(self, word):
-        return self.__word2vec_model.get_vector(word)
-
 class Word2VecWeightCalculator():
     def __init__(self, debug_top_items, data_loader):
         self.__debug_top_items = debug_top_items
