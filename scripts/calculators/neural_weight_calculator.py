@@ -108,59 +108,47 @@ class NeuralWeightCalculator():
         articles_content = articles_content[order]
         targets = targets[order]
 
-        self.__save_file('%s_questions_id' % dataset_name, questions_id)
-        self.__save_file('%s_questions' % dataset_name, questions)
-        self.__save_file('%s_articles_id' % dataset_name, articles_id)
-        self.__save_file('%s_articles_title' % dataset_name, articles_title)
-        self.__save_file('%s_articles_content' % dataset_name, articles_content)
-        self.__save_file('%s_targets' % dataset_name, targets)
+        self.__save_file('nn_%s_questions_id' % dataset_name, questions_id)
+        self.__save_file('nn_%s_questions' % dataset_name, questions)
+        self.__save_file('nn_%s_articles_id' % dataset_name, articles_id)
+        self.__save_file('nn_%s_articles_title' % dataset_name, articles_title)
+        self.__save_file('nn_%s_articles_content' % dataset_name, articles_content)
+        self.__save_file('nn_%s_targets' % dataset_name, targets)
 
-    def generate_dataset(self, train_questions, test_questions):
+    def __generate_dataset(self, train_questions, validate_questions, test_questions):
         logging.info('start generating dataset')
         try:
-            self.__only_load_dataset()
+            self.__only_load_all_dataset()
         except:
             self.__generate_dataset_with_questions(train_questions, 'train')
+            self.__generate_dataset_with_questions(validate_questions, 'validate')
             self.__generate_dataset_with_questions(test_questions, 'test')
-            self.__only_load_dataset()
+            self.__only_load_all_dataset()
 
-    def __only_load_dataset(self):
+    def __only_load_dataset(self, dataset):
+        questions_id = self.__load_file('nn_%s_questions_id' % dataset)
+        questions = self.__load_file('nn_%s_questions' % dataset)
+        articles_id = self.__load_file('nn_%s_articles_id' % dataset)
+        articles_title = self.__load_file('nn_%s_articles_title' % dataset)
+        articles_content = self.__load_file('nn_%s_articles_content' % dataset)
+        targets = self.__load_file('nn_%s_targets' % dataset)
+
+        logging.debug("%s dataset:" % dataset)
+        logging.debug("samples: %d" % (questions.shape[0]))
+        logging.debug("questions_id: %s" % str(questions_id.shape))
+        logging.debug("questions: %s" % str(questions.shape))
+        logging.debug("articles_id: %s" % str(articles_id.shape))
+        logging.debug("articles_title: %s" % str(articles_title.shape))
+        logging.debug("articles_content: %s" % str(articles_content.shape))
+        logging.debug("targets: %s" % str(targets.shape))
+        return (questions_id, questions, articles_id, articles_title, articles_content, targets)
+
+    def __only_load_all_dataset(self):
         if self.__dataset_loaded:
             return
-
-        self.__train_questions_id = self.__load_file('train_questions_id')
-        self.__train_questions = self.__load_file('train_questions')
-        self.__train_articles_id = self.__load_file('train_articles_id')
-        self.__train_articles_title = self.__load_file('train_articles_title')
-        self.__train_articles_content = self.__load_file('train_articles_content')
-        self.__train_targets = self.__load_file('train_targets')
-
-        self.__test_questions_id = self.__load_file('test_questions_id')
-        self.__test_questions = self.__load_file('test_questions')
-        self.__test_articles_id = self.__load_file('test_articles_id')
-        self.__test_articles_title = self.__load_file('test_articles_title')
-        self.__test_articles_content = self.__load_file('test_articles_content')
-        self.__test_targets = self.__load_file('test_targets')
-
-        logging.info("train samples: %d" % self.__train_questions.shape[0])
-        logging.info("test samples: %d" % self.__test_questions.shape[0])
-
-        logging.debug("train dataset:")
-        logging.debug("questions_id: %s" % str(self.__train_questions_id.shape))
-        logging.debug("questions: %s" % str(self.__train_questions.shape))
-        logging.debug("articles_id: %s" % str(self.__train_articles_id.shape))
-        logging.debug("articles_title: %s" % str(self.__train_articles_title.shape))
-        logging.debug("articles_content: %s" % str(self.__train_articles_content.shape))
-        logging.debug("targets: %s" % str(self.__train_targets.shape))
-
-        logging.debug("train dataset:")
-        logging.debug("questions_id: %s" % str(self.__test_questions_id.shape))
-        logging.debug("questions: %s" % str(self.__test_questions.shape))
-        logging.debug("articles_id: %s" % str(self.__test_articles_id.shape))
-        logging.debug("articles_title: %s" % str(self.__test_articles_title.shape))
-        logging.debug("articles_content: %s" % str(self.__test_articles_content.shape))
-        logging.debug("targets: %s" % str(self.__test_targets.shape))
-
+        (self.__train_questions_id, self.__train_questions, self.__train_articles_id, self.__train_articles_title, self.__train_articles_content, self.__train_targets) = self.__only_load_dataset('train')
+        (self.__validate_questions_id, self.__validate_questions, self.__validate_articles_id, self.__validate_articles_title, self.__validate_articles_content, self.__validate_targets) = self.__only_load_dataset('validate')
+        (self.__test_questions_id, self.__test_questions, self.__test_articles_id, self.__test_articles_title, self.__test_articles_content, self.__test_targets) = self.__only_load_dataset('test')
         self.__dataset_loaded = True
 
     def __simple_test_model(self, model, dataset_name, questions, articles_title, articles_content, target):
@@ -168,7 +156,7 @@ class NeuralWeightCalculator():
             { 'questions': questions, 'articles_title': articles_title, 'articles_content': articles_content },
             { 'weight': target },
             verbose = 0)
-        logging.info('simple test, dataset: %s, loss: %.4f, accuracy: %.4f' % (dataset_name, test_scores[0], test_scores[1]))
+        logging.info('simple test, dataset: %s, loss: %.4f, accuracy: %.4f' % (dataset_name.rjust(10), test_scores[0], test_scores[1]))
 
     def __semi_test_model(self, model, dataset_name, questions, articles_title, articles_content, target):
         predictet_target = model.predict(
@@ -181,7 +169,18 @@ class NeuralWeightCalculator():
         total_count = target.shape[0]
         r1 = self.__colored('%d/%d' % (corrected_count, total_count), 'yellow')
         r2 = self.__colored('%.2f %%' % (corrected_count / total_count * 100), 'yellow')
-        logging.info("semi test, dataset: %s, corrected: %s (%s)" % (dataset_name, r1, r2))
+        logging.info("semi test, dataset: %s, corrected: %s (%s)" % (dataset_name.rjust(10), r1, r2))
+
+    def __test_model(self, dataset, model):
+        if dataset == 'train':
+            self.__simple_test_model(model, dataset, self.__train_questions, self.__train_articles_title, self.__train_articles_content, self.__train_targets)
+            # self.__semi_test_model(model, dataset, self.__train_questions, self.__train_articles_title, self.__train_articles_content, self.__train_targets)
+        elif dataset == 'validate':
+            self.__simple_test_model(model, dataset, self.__validate_questions, self.__validate_articles_title, self.__validate_articles_content, self.__validate_targets)
+            # self.__semi_test_model(model, dataset, self.__validate_questions, self.__validate_articles_title, self.__validate_articles_content, self.__validate_targets)
+        elif dataset == 'test':
+            self.__simple_test_model(model, dataset, self.__test_questions, self.__test_articles_title, self.__test_articles_content, self.__test_targets)
+            # self.__semi_test_model(model, dataset, self.__test_questions, self.__test_articles_title, self.__test_articles_content, self.__test_targets)
 
     def _words_layers(self, filters, input):
         blocks = []
@@ -249,16 +248,18 @@ class NeuralWeightCalculator():
         model = tf.keras.models.load_model('%s/%s' % (self.__workdir, best_model_file))
         return model
 
-    def train(self, epoch):
+    def train(self, train_questions, validate_questions, test_questions, epoch):
+        self.__generate_dataset(train_questions, validate_questions, test_questions)
+
         if epoch == 0:
             return
 
-        logging.info('training model')
+        logging.info('training: %s' % self._model_name())
 
         try:
             model = self.__load_model()
-            self.__simple_test_model(model, 'test', self.__test_questions, self.__test_articles_title, self.__test_articles_content, self.__test_targets)
-            self.__semi_test_model(model, 'test', self.__test_questions, self.__test_articles_title, self.__test_articles_content, self.__test_targets)
+            self.__test_model('train', model)
+            self.__test_model('validate', model)
         except:
             logging.info('create model')
             model = self.__create_model()
@@ -268,8 +269,8 @@ class NeuralWeightCalculator():
         def on_epoch_end(current_epoch, data):
             try:
                 logging.info("after epoch %d/%d, loss: %.6f, accuracy: %.6f, val_loss: %.6f, val_accuracy: %.6f" % (current_epoch, epoch, data['loss'], data['accuracy'], data['val_loss'], data['val_accuracy']))
-                # self.__simple_test_model(model, 'test', test_questions, test_articles_title, test_articles_content, test_target)
-                self.__semi_test_model(model, 'test', self.__test_questions, self.__test_articles_title, self.__test_articles_content, self.__test_targets)
+                # self.__test_model('train', model)
+                # self.__test_model('validate', model)
             except:
                 pass
 
@@ -287,13 +288,18 @@ class NeuralWeightCalculator():
                 { 'weight': self.__train_targets },
                 batch_size = 64,
                 epochs = epoch,
-                validation_split = 0.2,
+                validation_data = (
+                    { 'questions': self.__validate_questions, 'articles_title': self.__validate_articles_title, 'articles_content': self.__validate_articles_content },
+                    { 'weight': self.__validate_targets }
+                ),
                 verbose = 0,
                 callbacks=[save_callback, test_callback])
-            self.__simple_test_model(model, 'test', self.__test_questions, self.__test_articles_title, self.__test_articles_content, self.__test_targets)
-            self.__semi_test_model(model, 'test', self.__test_questions, self.__test_articles_title, self.__test_articles_content, self.__test_targets)
         except KeyboardInterrupt:
             logging.info('learing stoppped by user')
+
+        self.__test_model('train', model)
+        self.__test_model('validate', model)
+        self.__test_model('test', model)
 
     def __full_test_article(self, method, bypass_model, question_id, question_data, articles_id, articles_data):
         questions_data = np.repeat([question_data], articles_data.shape[0], 0)
@@ -338,6 +344,7 @@ class NeuralWeightCalculator():
             logging.debug("    %s" % str(i.shape))
 
     def prepare_for_testing(self):
+        logging.info('prepare for testing: %s' % self._model_name())
         model = self.__load_model()
         (self.__questions_model, articles_model) = self.__extract_models(model)
         self.__bypass_model = self.__create_distances_model(NeuralWeightCalculator.__FILTERS, True)
@@ -346,8 +353,9 @@ class NeuralWeightCalculator():
         NeuralWeightCalculator.__print_model(self.__questions_model)
         NeuralWeightCalculator.__print_model(articles_model)
         NeuralWeightCalculator.__print_model(self.__bypass_model)
-        self.__simple_test_model(model, 'test', self.__test_questions, self.__test_articles_title, self.__test_articles_content, self.__test_targets)
-        self.__semi_test_model(model, 'test', self.__test_questions, self.__test_articles_title, self.__test_articles_content, self.__test_targets)
+        self.__test_model('train', model)
+        self.__test_model('validate', model)
+        self.__test_model('test', model)
 
         self.__articles_id = self.__data_loader.get_articles_id()
         self.__articles_output = np.zeros(shape=(0, articles_model.output_shape[1]))
