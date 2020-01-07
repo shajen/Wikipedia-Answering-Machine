@@ -9,17 +9,17 @@ import tensorflow as tf
 import re
 
 class NeuralWeightCalculator():
-    _W2V_SIZE = 100
     __ARTICLES_CHUNKS = 100
     __FILTERS = 64
 
-    def __init__(self, data_loader, debug_top_items, workdir, questions_words, articles_title_words, articles_content_words, good_bad_ratio):
+    def __init__(self, data_loader, debug_top_items, workdir, good_bad_ratio):
         self.__data_loader = data_loader
         self.__debug_top_items = debug_top_items
         self.__workdir = workdir
-        self.__questions_words = questions_words
-        self.__articles_title_words = articles_title_words
-        self.__articles_content_words = articles_content_words
+        self._word2vec_size = data_loader.word2vec_size()
+        self.__questions_words = data_loader.questions_words_count()
+        self.__articles_title_words = data_loader.articles_title_words_count()
+        self.__articles_content_words = data_loader.articles_content_words_count()
         self.__good_bad_ratio = good_bad_ratio
         self.__dataset_loaded = False
 
@@ -29,9 +29,9 @@ class NeuralWeightCalculator():
     def __prepare_articles(self, articles_id, top_words, is_title, show_progress):
         logging.debug('preparing %d articles, top words: %d, title: %d' % (articles_id.shape[0], top_words, is_title))
         if is_title:
-            data = np.zeros(shape=(articles_id.shape[0], self.__articles_title_words, NeuralWeightCalculator._W2V_SIZE), dtype=np.float32)
+            data = np.zeros(shape=(articles_id.shape[0], self.__articles_title_words, self._word2vec_size), dtype=np.float32)
         else:
-            data = np.zeros(shape=(articles_id.shape[0], self.__articles_content_words, NeuralWeightCalculator._W2V_SIZE), dtype=np.float32)
+            data = np.zeros(shape=(articles_id.shape[0], self.__articles_content_words, self._word2vec_size), dtype=np.float32)
         total = articles_id.shape[0]
         current = 0
         step = max(1, round(total / (10 if is_title else 100)))
@@ -196,15 +196,15 @@ class NeuralWeightCalculator():
         block = tf.keras.layers.GlobalMaxPooling1D()(block)
 
     def __create_questions_model(self, filters):
-        input = tf.keras.Input(shape=(self.__questions_words, NeuralWeightCalculator._W2V_SIZE), name='questions')
+        input = tf.keras.Input(shape=(self.__questions_words, self._word2vec_size), name='questions')
         block = self._words_layers(filters, input)
         return tf.keras.Model(input, block, name='questions_model')
 
     def __create_articles_model(self, filters):
-        title_input = tf.keras.Input(shape=(self.__articles_title_words, NeuralWeightCalculator._W2V_SIZE), name='articles_title')
+        title_input = tf.keras.Input(shape=(self.__articles_title_words, self._word2vec_size), name='articles_title')
         title_block = self._words_layers(filters, title_input)
 
-        content_input = tf.keras.Input(shape=(self.__articles_content_words, NeuralWeightCalculator._W2V_SIZE), name='articles_content')
+        content_input = tf.keras.Input(shape=(self.__articles_content_words, self._word2vec_size), name='articles_content')
         content_block = self._words_layers(filters, content_input)
 
         articles_block = tf.keras.layers.concatenate([title_block, content_block], name='articles_output')
@@ -221,9 +221,9 @@ class NeuralWeightCalculator():
         articles_model = self.__create_articles_model(filters)
 
         if not bypass_models:
-            questions_input = tf.keras.Input(shape=(self.__questions_words, NeuralWeightCalculator._W2V_SIZE), name='questions')
-            articles_title_input = tf.keras.Input(shape=(self.__articles_title_words, NeuralWeightCalculator._W2V_SIZE), name='articles_title')
-            articles_content_input = tf.keras.Input(shape=(self.__articles_content_words, NeuralWeightCalculator._W2V_SIZE), name='articles_content')
+            questions_input = tf.keras.Input(shape=(self.__questions_words, self._word2vec_size), name='questions')
+            articles_title_input = tf.keras.Input(shape=(self.__articles_title_words, self._word2vec_size), name='articles_title')
+            articles_content_input = tf.keras.Input(shape=(self.__articles_content_words, self._word2vec_size), name='articles_content')
 
             x = tf.keras.layers.concatenate([questions_model(questions_input), articles_model([articles_title_input, articles_content_input])])
             return tf.keras.Model(inputs=[questions_input, articles_title_input, articles_content_input], outputs=self._weight_layers(x), name='distances_model')

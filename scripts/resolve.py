@@ -121,10 +121,10 @@ def start(args, questions, method_name):
     if args.word2vec_model:
         start_callback_threads(args, questions, '%s, type: w2v, topn: %03d, title: %d' % (method_name, args.topn, args.title), resolve_questions_word2vec, (data_loader,))
     if args.convolution_neural_network:
-        model = calculators.neural_weight_calculator.NeuralWeightCalculator(data_loader, args.debug_top_items, args.cache_directory, args.learning_model_questions_words_count, args.learning_model_articles_title_words_count, args.learning_model_articles_content_words_count, args.neural_model_good_bad_ratio)
+        model = calculators.neural_weight_calculator.NeuralWeightCalculator(data_loader, args.debug_top_items, args.cache_directory, args.neural_model_good_bad_ratio)
         start_learning_model(args, questions, model, '%s, type: cnn' % (method_name))
     if args.deep_averaging_network:
-        model = calculators.deep_averaging_neural_weight_calculator.DeepAveragingNeuralWeightCalculator(data_loader, args.debug_top_items, args.cache_directory, args.learning_model_questions_words_count, args.learning_model_articles_title_words_count, args.learning_model_articles_content_words_count, args.neural_model_good_bad_ratio)
+        model = calculators.deep_averaging_neural_weight_calculator.DeepAveragingNeuralWeightCalculator(data_loader, args.debug_top_items, args.cache_directory, args.neural_model_good_bad_ratio)
         start_learning_model(args, questions, model, '%s, type: dan' % (method_name))
     if args.evolutionary_algorithm:
         model = calculators.evolutionary_algorithm.EvolutionaryAlgorithm(args.debug_top_items, args.cache_directory, args.evolutionary_algorithm_methods_patterns, args.evolutionary_algorithm_population)

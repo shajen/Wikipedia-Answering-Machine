@@ -9,6 +9,7 @@ class DataLoader():
     def __init__(self, learning_model_count, classic_model_count, word2vec_file, word2vec_size):
         logging.info('data loader initializing')
         self.__word2vec_file = word2vec_file
+        self.__word2vec_size = word2vec_size
         (self.__learning_model_questions_words_count, self.__learning_model_articles_title_words_count, self.__learning_model_articles_content_words_count) = learning_model_count
         (self.__classic_model_questions_words_count, self.__classic_model_articles_title_words_count, self.__classic_model_articles_content_words_count) = classic_model_count
 
@@ -16,6 +17,18 @@ class DataLoader():
         self.__load_questions(stop_words, self.__classic_model_questions_words_count)
         self.__load_articles(stop_words, self.__classic_model_articles_title_words_count, self.__classic_model_articles_content_words_count)
         self.__load_words(word2vec_size, 10)
+
+    def word2vec_size(self):
+        return self.__word2vec_size
+
+    def questions_words_count(self):
+        return self.__learning_model_questions_words_count
+
+    def articles_title_words_count(self):
+        return self.__learning_model_articles_title_words_count
+
+    def articles_content_words_count(self):
+        return self.__learning_model_articles_content_words_count
 
     def __load_word2vec_model(self):
         try:
