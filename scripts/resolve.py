@@ -21,6 +21,20 @@ import tools.data_loader
 import tools.logger
 import tools.results_presenter
 
+def split_questions(questions, args):
+    values = list(map(lambda n: int(n), args.dataset_proportion.split(':')))
+    train_dataset_count = round(len(questions) * values[0] / sum(values))
+    validate_dataset_count = round(len(questions) * values[1] / sum(values))
+    train_dataset = questions[:train_dataset_count]
+    validate_dataset = questions[train_dataset_count:train_dataset_count+validate_dataset_count]
+    test_dataset = questions[train_dataset_count+validate_dataset_count:]
+    logging.info('train dateset size    : %d' % len(train_dataset))
+    logging.info('validate dateset size : %d' % len(validate_dataset))
+    logging.info('test dateset size     : %d' % len(test_dataset))
+    logging.info('total questions size  : %d' % len(questions))
+    logging.info('dataset sum size      : %d' % (len(train_dataset) + len(validate_dataset) + len(test_dataset)))
+    return (train_dataset, validate_dataset, test_dataset)
+
 def resolve_questions_tf_idf(args, questions_queue, method):
     neighbors = list(map(lambda x: int(x), args.neighbors.split(',')))
     minimal_word_idf_weights = list(map(lambda x: float(x), args.minimal_word_idf_weights.split(',')))
@@ -65,7 +79,7 @@ def resolve_questions_word2vec(args, questions_queue, method_name, data_loader):
 
 def start_callback_threads(args, questions, method_name, callback, callback_arguments):
     db.connections.close_all()
-    logging.info('method_name: %s' % method_name)
+    logging.info('method: %s' % method_name)
     questions_queue = multiprocessing.Queue()
     for question in questions:
         questions_queue.put(question)
@@ -83,64 +97,41 @@ def start_callback_threads(args, questions, method_name, callback, callback_argu
         for thread in threads:
             thread.terminate()
 
-def resolve_questions_neural(args, questions, method_name, model):
-    for question in questions:
-        if not tools.results_presenter.ResultsPresenter.is_already_solved(question, method_name):
-            model.test(question.id, method_name)
+def start_neural(args, questions, method_name, model_class, data_loader):
+    logging.info('method: %s' % method_name)
 
-def start_neural(args, questions, method_name, model_class):
-    logging.info("questions_words_count: %d" % args.neural_model_questions_words_count)
-    logging.info("articles_title_words_count: %d" % args.neural_model_articles_title_words_count)
-    logging.info("articles_words_count: %d" % args.neural_model_articles_words_count)
-    logging.info("good_bad_ratio: %d" % args.neural_model_good_bad_ratio)
-    logging.info("train_data_percentage: %.2f" % args.train_data_percentage)
-    logging.info("epoch: %d" % args.neural_model_epoch)
-    logging.info('method_name: %s' % method_name)
-
-    split_index = int(len(questions) * args.train_data_percentage)
-    train_questions = questions[:split_index]
-    test_questions = questions[split_index:]
-
-    data_loader = tools.data_loader.DataLoader(args.neural_model_questions_words_count, args.neural_model_articles_title_words_count, args.neural_model_articles_words_count, args.word2vec_file, 100)
-    model = model_class(data_loader, args.debug_top_items, args.neural_model_work_directory, args.neural_model_questions_words_count, args.neural_model_articles_title_words_count, args.neural_model_articles_words_count, args.neural_model_good_bad_ratio)
-    model.generate_dataset(train_questions, test_questions)
-    model.train(args.neural_model_epoch)
-    if not args.neural_model_only_train:
+    (train_questions, validate_questions, test_questions) = split_questions(questions, args)
+    model = model_class(data_loader, args.debug_top_items, args.cache_directory, args.learning_model_questions_words_count, args.learning_model_articles_title_words_count, args.learning_model_articles_content_words_count, args.neural_model_good_bad_ratio)
+    model.train(train_questions, validate_questions, test_questions, args.epoch)
+    if not args.disable_testing:
         model.prepare_for_testing()
-        resolve_questions_neural(args, train_questions, '%s, dateset: train' % method_name, model)
-        resolve_questions_neural(args, test_questions, '%s, dateset: test' % method_name, model)
+        for question in questions:
+            if not tools.results_presenter.ResultsPresenter.is_already_solved(question, method_name):
+                model.test(question.id, method_name)
 
 def start_evolutionary_algorithm(args, questions, method_name):
-    logging.info("train_data_percentage: %.2f" % args.train_data_percentage)
-    logging.info("population: %d" % args.evolutionary_algorithm_population)
-    logging.info("generations: %d" % args.evolutionary_algorithm_generations)
-    method_name = "%s, p: %04d, g: %04d" % (method_name, args.evolutionary_algorithm_population, args.evolutionary_algorithm_generations)
-    logging.info('method_name: %s' % method_name)
-
+    logging.info('method: %s' % method_name)
     questions_id = list(map(lambda question: question.id, questions))
-    split_index = int(len(questions_id) * args.train_data_percentage)
-    train_questions_id = questions_id[:split_index]
-    test_questions_id = questions_id[split_index:]
+    (train_questions_id, validate_questions_id, test_questions_id) = split_questions(questions_id, args)
 
-    model = calculators.evolutionary_algorithm.EvolutionaryAlgorithm(args.evolutionary_algorithm_work_directory)
-    model.run(train_questions_id, test_questions_id, method_name, args.debug_top_items, args.evolutionary_algorithm_methods_patterns, args.evolutionary_algorithm_population, args.evolutionary_algorithm_generations)
+    model = calculators.evolutionary_algorithm.EvolutionaryAlgorithm(args.cache_directory)
+    model.run(train_questions_id, test_questions_id, method_name, args.debug_top_items, args.evolutionary_algorithm_methods_patterns, args.evolutionary_algorithm_population, args.epoch)
 
 def start(args, questions, method_name):
-    logging.info('questions: %d' % len(questions))
-    logging.info('threads: %d' % args.threads)
-    logging.info('debug_top_items: %d' % args.debug_top_items)
-    logging.info('topn: %d' % args.topn)
+    learning_model_count = (args.learning_model_questions_words_count, args.learning_model_articles_title_words_count, args.learning_model_articles_content_words_count)
+    classic_model_count = (args.classic_model_questions_words_count, args.classic_model_articles_title_words_count, args.classic_model_articles_content_words_count)
+    data_loader = tools.data_loader.DataLoader(learning_model_count, classic_model_count, args.word2vec_file, args.word2vec_size)
+
     if args.tfidf_models or args.vector_models:
         start_callback_threads(args, questions, '%s, type: tfi, title: %d, ngram: %d' % (method_name, args.title, args.ngram), resolve_questions_tf_idf, ())
     if args.word2vec_model:
-        data_loader = tools.data_loader.DataLoader(args.neural_model_questions_words_count, args.neural_model_articles_title_words_count, args.neural_model_articles_words_count, args.word2vec_file, 100)
         start_callback_threads(args, questions, '%s, type: w2v, topn: %03d, title: %d' % (method_name, args.topn, args.title), resolve_questions_word2vec, (data_loader,))
     if args.convolution_neural_network:
-        start_neural(args, questions, '%s, type: cnn, topn: %03d' % (method_name, args.topn), calculators.neural_weight_calculator.NeuralWeightCalculator)
+        start_neural(args, questions, '%s, type: cnn, topn: %03d' % (method_name, args.topn), calculators.neural_weight_calculator.NeuralWeightCalculator, data_loader)
     if args.deep_averaging_network:
-        start_neural(args, questions, '%s, type: dan, topn: %03d' % (method_name, args.topn), calculators.deep_averaging_neural_weight_calculator.DeepAveragingNeuralWeightCalculator)
+        start_neural(args, questions, '%s, type: dan, topn: %03d' % (method_name, args.topn), calculators.deep_averaging_neural_weight_calculator.DeepAveragingNeuralWeightCalculator, data_loader)
     if args.evolutionary_algorithm:
-        start_evolutionary_algorithm(args, questions, '%s, type: ean' % (method_name))
+        start_evolutionary_algorithm(args, questions, '%s, type: ean, p: %04d' % (method_name, args.evolutionary_algorithm_population))
     logging.info('finish')
 
 def get_method_name(args):
@@ -164,36 +155,43 @@ def run(*args):
     parser = argparse.ArgumentParser()
     parser.add_argument("-t", "--threads", help="threads", type=int, default=1, choices=range(1, 129), metavar="int")
     parser.add_argument("-q", "--questions", help="solve first n questions", type=int, default=10**9, metavar="n")
+    parser.add_argument('-v', '--verbose', action='count', default=0)
+    parser.add_argument('-m', '--method', help="method name to make unique in database", type=str, default='', metavar="method")
+    parser.add_argument("-dti", "--debug_top_items", help="print top n items in debug", type=int, default=3, metavar="int")
+    parser.add_argument("-tn", "--topn", help="use n nearest words in word2vec model", type=int, default=10, metavar="n")
+    parser.add_argument("-cd", "--cache_directory", help="directory to save and read cache data", type=str)
+    parser.add_argument("-w2vf", "--word2vec_file", help="path to word2vec model", type=str, default='', metavar="file")
+    parser.add_argument("-w2vs", "--word2vec_size", help="size of word2vec vector", type=int, default=100, metavar="n")
+
     parser.add_argument("-T", "--title", help="calculate based on articles title not content", action='store_true')
     parser.add_argument('-n', '--ngram', help="use ngram mode", type=int, default=1, metavar="ngram")
+    parser.add_argument("-N", "--neighbors", help="count tf-idf in every n neighboring words tuple in articles", type=str, default='0', metavar="0,10,20")
+    parser.add_argument("-mwiw", "--minimal_word_idf_weights", help="use only words with idf weight above", type=str, default='0.0', metavar="0.0,1.6,3.2")
+    parser.add_argument("-pf", "--power_factors", help="use to sum words weight in count article weight", type=str, default='3', metavar="1,2,3,4")
+    parser.add_argument("-cm_qwc", "--classic_model_questions_words_count", help="use first n words from questions", type=int, default=100)
+    parser.add_argument("-cm_atwc", "--classic_model_articles_title_words_count", help="use first n words from articles title", type=int, default=100)
+    parser.add_argument("-cm_acwc", "--classic_model_articles_content_words_count", help="use first n words from articles", type=int, default=1000)
+
+    parser.add_argument("-dp", "--dataset_proportion", help="proportion of train:validate:test dataset", type=str, default='60:20:20')
+    parser.add_argument("-e", "--epoch", help="train n epoch", type=int, default=10)
+    parser.add_argument("-dt", "--disable_testing", help="train models without testing", action='store_true')
+    parser.add_argument("-lm_qwc", "--learning_model_questions_words_count", help="use first n words from questions", type=int, default=20)
+    parser.add_argument("-lm_atwc", "--learning_model_articles_title_words_count", help="use first n words from articles title", type=int, default=20)
+    parser.add_argument("-lm_acwc", "--learning_model_articles_content_words_count", help="use first n words from articles", type=int, default=100)
+
     parser.add_argument("-tm", "--tfidf_models", help="use td-idf models", action='store_true')
     parser.add_argument("-vm", "--vector_models", help="use vector models", action='store_true')
     parser.add_argument("-w2vm", "--word2vec_model", help="use word2vec model", action='store_true')
     parser.add_argument("-cnn", "--convolution_neural_network", help="use onvolution neural network", action='store_true')
     parser.add_argument("-dan", "--deep_averaging_network", help="use deep averaging network", action='store_true')
-    parser.add_argument("-tdp", "--train_data_percentage", help="percentage of train data", type=float, default=0.8)
-    parser.add_argument("-nm_qwc", "--neural_model_questions_words_count", help="use first n words from questions", type=int, default=20)
-    parser.add_argument("-nm_atwc", "--neural_model_articles_title_words_count", help="use first n words from articles title", type=int, default=20)
-    parser.add_argument("-nm_awc", "--neural_model_articles_words_count", help="use first n words from articles", type=int, default=100)
-    parser.add_argument("-nm_gbr", "--neural_model_good_bad_ratio", help="ratio between good and bad articles", type=int, default=3)
-    parser.add_argument("-nm_wd", "--neural_model_work_directory", help="directory to save and read data during learing", type=str)
-    parser.add_argument("-nm_e", "--neural_model_epoch", help="train n epoch", type=int, default=10)
-    parser.add_argument("-nm_ot", "--neural_model_only_train", help="train models without testing", action='store_true')
+    parser.add_argument("-nm_gbr", "--neural_model_good_bad_ratio", help="ratio between good and bad articles", type=int, default=1)
     parser.add_argument("-ea", "--evolutionary_algorithm", help="enable evolutionary algorithm model", action='store_true')
     parser.add_argument("-ea_p", "--evolutionary_algorithm_population", help="population size", type=int, default=100)
-    parser.add_argument("-ea_g", "--evolutionary_algorithm_generations", help="number of generations", type=int, default=100)
     parser.add_argument("-ea_mp", "--evolutionary_algorithm_methods_patterns", help="methods patterns used in model", type=str, default='', metavar="method1,method2")
-    parser.add_argument("-ea_wd", "--evolutionary_algorithm_work_directory", help="directory to save and read data during learing", type=str)
-    parser.add_argument("-w2vf", "--word2vec_file", help="path to word2vec model", type=str, default='', metavar="file")
-    parser.add_argument('-m', '--method', help="method name to make unique in database", type=str, default='', metavar="method")
-    parser.add_argument("-dti", "--debug_top_items", help="print top n items in debug", type=int, default=3, metavar="int")
-    parser.add_argument("-tn", "--topn", help="use n nearest words in word2vec model", type=int, default=10, metavar="n")
-    parser.add_argument("-N", "--neighbors", help="count tf-idf in every n neighboring words tuple in articles", type=str, default='0', metavar="0,10,20")
-    parser.add_argument("-mwiw", "--minimal_word_idf_weights", help="use only words with idf weight above", type=str, default='0.0', metavar="0.0,1.6,3.2")
-    parser.add_argument("-pf", "--power_factors", help="use to sum words weight in count article weight", type=str, default='4', metavar="1,2,3,4")
-    parser.add_argument('-v', '--verbose', action='count', default=0)
     args = parser.parse_args(args)
-
     tools.logger.configLogger(args.verbose)
+    for arg in vars(args):
+        logging.info("%s: %s" % (arg.ljust(50), getattr(args, arg)))
+
     questions = list(Question.objects.order_by('id').all())[:args.questions]
     start(args, questions, get_method_name(args))

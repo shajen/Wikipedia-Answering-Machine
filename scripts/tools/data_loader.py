@@ -6,12 +6,15 @@ import numpy as np
 import SharedArray
 
 class DataLoader():
-    def __init__(self, question_words, article_title_words, article_content_words, word2vec_file, word2vec_size):
+    def __init__(self, learning_model_count, classic_model_count, word2vec_file, word2vec_size):
         logging.info('data loader initializing')
         self.__word2vec_file = word2vec_file
+        (self.__learning_model_questions_words_count, self.__learning_model_articles_title_words_count, self.__learning_model_articles_content_words_count) = learning_model_count
+        (self.__classic_model_questions_words_count, self.__classic_model_articles_title_words_count, self.__classic_model_articles_content_words_count) = classic_model_count
+
         stop_words = set(Word.objects.filter(is_stop_word=True).values_list('id', flat=True))
-        self.__load_questions(stop_words, question_words)
-        self.__load_articles(stop_words, article_title_words, article_content_words)
+        self.__load_questions(stop_words, self.__classic_model_questions_words_count)
+        self.__load_articles(stop_words, self.__classic_model_articles_title_words_count, self.__classic_model_articles_content_words_count)
         self.__load_words(word2vec_size, 10)
 
     def __load_word2vec_model(self):
@@ -81,7 +84,6 @@ class DataLoader():
             i += 1
 
     def __load_words(self, word2vec_size, similar_words_top_n):
-        self.__load_word2vec_model()
         words_count = Word.objects.count()
         max_words_id = Word.objects.order_by('-id')[0].id + 1
         logging.info('words count: %d' % words_count)
@@ -94,6 +96,7 @@ class DataLoader():
 
         self.__words_to_vec[:] = np.nan
 
+        self.__load_word2vec_model()
         logging.info('loading words vectors')
         for (word_id, value) in Word.objects.filter(is_stop_word=False).values_list('id', 'value'):
             logging.debug(word_id)
@@ -142,13 +145,13 @@ class DataLoader():
         return self.__questions_id
 
     def get_question_words_id(self, question_id):
-        return self.__questions_words[question_id]
+        return self.__questions_words[question_id][:self.__learning_model_questions_words_count]
 
     def get_articles_id(self):
         return self.__articles_id
 
     def get_article_words_id(self, article_id, is_title):
         if is_title:
-            return self.__articles_title_words[article_id]
+            return self.__articles_title_words[article_id][:self.__learning_model_articles_title_words_count]
         else:
-            return self.__articles_content_words[article_id]
+            return self.__articles_content_words[article_id][:self.__learning_model_articles_content_words_count]
