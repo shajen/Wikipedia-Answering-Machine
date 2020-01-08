@@ -14,9 +14,10 @@ class DataLoader():
         (self.__classic_model_questions_words_count, self.__classic_model_articles_title_words_count, self.__classic_model_articles_content_words_count) = classic_model_count
 
         stop_words = set(Word.objects.filter(is_stop_word=True).values_list('id', flat=True))
-        self.__load_questions(stop_words, self.__classic_model_questions_words_count)
-        self.__load_articles(stop_words, self.__classic_model_articles_title_words_count, self.__classic_model_articles_content_words_count)
+        self.__load_base_forms()
         self.__load_words(word2vec_size, 10)
+        self.__load_questions(stop_words)
+        self.__load_articles(stop_words)
 
     def word2vec_size(self):
         return self.__word2vec_size
@@ -45,56 +46,84 @@ class DataLoader():
             data = SharedArray.create("shm://%s" % name, shape=shape, dtype=type)
             return (data, False)
 
-    def __load_questions(self, stop_words, question_words):
+    def __load_questions(self, stop_words):
         questions_count = Question.objects.count()
         max_questions_id = Question.objects.order_by('-id')[0].id + 1
         logging.info('questions count: %d' % questions_count)
         logging.info('max questions id: %d' % max_questions_id)
 
         (self.__questions_id, questions_id_ok) = self.__create_or_link('questions_id', (questions_count), np.uint32)
-        (self.__questions_words, questions_words_ok) = self.__create_or_link('questions_words', (max_questions_id, question_words), np.uint32)
+        (self.__questions_words, questions_words_ok) = self.__create_or_link('questions_words', (max_questions_id, self.__learning_model_questions_words_count), np.uint32)
+        (self.__questions_base_words, questions_base_words_ok) = self.__create_or_link('questions_base_words', (max_questions_id, self.__classic_model_questions_words_count), np.uint32)
 
-        if questions_words_ok:
+        if all([questions_id_ok, questions_words_ok, questions_base_words_ok]):
             logging.info("data already exists")
             return
 
         self.__questions_id.fill(0)
         self.__questions_words.fill(0)
+        self.__questions_base_words.fill(0)
 
         i = 0
         logging.info("loading questions")
         for question in Question.objects.all():
             logging.debug('question: %d' % question.id)
             self.__questions_id[i] = question.id
-            self.__questions_words[question.id] = question.get_words(stop_words, question_words)
+            words = question.get_words(stop_words, self.__classic_model_questions_words_count)
+            self.__questions_words[question.id] = words[:self.__learning_model_questions_words_count]
+            self.__questions_base_words[question.id] = self.__words_to_base_forms[words]
             i += 1
 
-    def __load_articles(self, stop_words, article_title_words, article_content_words):
+    def __load_articles(self, stop_words):
         articles_count = Article.objects.filter(content_words_count__gte=10).count()
         max_articles_id = Article.objects.order_by('-id')[0].id + 1
         logging.info('articles count: %d' % articles_count)
         logging.info('max articles id: %d' % max_articles_id)
 
         (self.__articles_id, articles_id_ok) = self.__create_or_link('articles_id', (articles_count), np.uint32)
-        (self.__articles_title_words, articles_title_words_ok) = self.__create_or_link('articles_title_words', (max_articles_id, article_title_words), np.uint32)
-        (self.__articles_content_words, articles_content_words_ok) = self.__create_or_link('articles_content_words', (max_articles_id, article_content_words), np.uint32)
+        (self.__articles_title_words, articles_title_words_ok) = self.__create_or_link('articles_title_words', (max_articles_id, self.__learning_model_articles_title_words_count), np.uint32)
+        (self.__articles_title_base_words, articles_title_base_words_ok) = self.__create_or_link('articles_title_base_words', (max_articles_id, self.__classic_model_articles_title_words_count), np.uint32)
+        (self.__articles_content_words, articles_content_words_ok) = self.__create_or_link('articles_content_words', (max_articles_id, self.__learning_model_articles_content_words_count), np.uint32)
+        (self.__articles_content_base_words, articles_content_base_words_ok) = self.__create_or_link('articles_content_base_words', (max_articles_id, self.__classic_model_articles_content_words_count), np.uint32)
 
-        if all([articles_id_ok, articles_title_words_ok, articles_content_words_ok]):
+        if all([articles_id_ok, articles_title_words_ok, articles_title_base_words_ok, articles_content_words_ok, articles_content_base_words_ok]):
             logging.info("data already exists")
             return
 
         self.__articles_id.fill(0)
         self.__articles_title_words.fill(0)
+        self.__articles_title_base_words.fill(0)
         self.__articles_content_words.fill(0)
+        self.__articles_content_base_words.fill(0)
 
         i = 0
         logging.info("loading articles")
         for article in Article.objects.filter(content_words_count__gte=10):
             logging.debug('article: %d' % article.id)
             self.__articles_id[i] = article.id
-            self.__articles_title_words[article.id] = article.get_words(True, stop_words, article_title_words)
-            self.__articles_content_words[article.id] = article.get_words(False, stop_words, article_content_words)
+            title_words = article.get_words(True, stop_words, self.__classic_model_articles_title_words_count)
+            content_words = article.get_words(False, stop_words, self.__classic_model_articles_content_words_count)
+            self.__articles_title_words[article.id] = title_words[:self.__learning_model_articles_title_words_count]
+            self.__articles_content_words[article.id] = content_words[:self.__learning_model_articles_content_words_count]
+            self.__articles_title_base_words[article.id] = self.__words_to_base_forms[title_words]
+            self.__articles_content_base_words[article.id] = self.__words_to_base_forms[content_words]
             i += 1
+
+    def __load_base_forms(self):
+        words_count = Word.objects.count()
+        max_words_id = Word.objects.order_by('-id')[0].id + 1
+        logging.info('words count: %d' % words_count)
+        logging.info('max words id: %d' % max_words_id)
+
+        (self.__words_to_base_forms, words_to_base_forms_ok) = self.__create_or_link('words_to_base_forms', (max_words_id), np.uint32)
+        if all([words_to_base_forms_ok]):
+            logging.info("data already exists")
+            return
+
+        self.__words_to_base_forms[:] = np.arange(max_words_id)[:]
+
+        for (base_word_id, changed_word_id) in WordForm.objects.order_by('base_word_id').values_list('base_word_id', 'changed_word_id'):
+            self.__words_to_base_forms[changed_word_id] = base_word_id
 
     def __load_words(self, word2vec_size, similar_words_top_n):
         words_count = Word.objects.count()
@@ -158,13 +187,29 @@ class DataLoader():
         return self.__questions_id
 
     def get_question_words_id(self, question_id):
-        return self.__questions_words[question_id][:self.__learning_model_questions_words_count]
+        return self.__questions_words[question_id]
 
     def get_articles_id(self):
         return self.__articles_id
 
     def get_article_words_id(self, article_id, is_title):
         if is_title:
-            return self.__articles_title_words[article_id][:self.__learning_model_articles_title_words_count]
+            return self.__articles_title_words[article_id]
         else:
-            return self.__articles_content_words[article_id][:self.__learning_model_articles_content_words_count]
+            return self.__articles_content_words[article_id]
+
+    def __words_to_base_words_trimmed(self, words):
+        index = np.nonzero(words == 0)[0]
+        if index.size:
+            return words[:index[0]]
+        else:
+            return np.array([])
+
+    def get_question_base_words(self, question_id):
+        return self.__words_to_base_words_trimmed(self.__questions_base_words[question_id])
+
+    def get_articles_base_words(self, is_title):
+        if is_title:
+            return self.__articles_title_base_words
+        else:
+            return self.__articles_content_base_words

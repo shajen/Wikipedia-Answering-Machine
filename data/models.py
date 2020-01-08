@@ -82,8 +82,8 @@ class Article(models.Model):
         words = list(filter(lambda w: w != '', words))
         words = list(map(lambda w: int(w), words))
         words = list(filter(lambda w: w not in stop_words, words))
-        words = np.array(words[:top_words])
-        words = np.concatenate((words, np.zeros(shape=(top_words - words.shape[0]))), axis=0)
+        words = np.array(words[:top_words], dtype=np.uint32)
+        words = np.concatenate((words, np.zeros(shape=(top_words - words.shape[0]), dtype=np.uint32)), axis=0)
         return words
 
 class Method(models.Model):
@@ -103,32 +103,13 @@ class Question(models.Model):
     def __str__(self):
         return self.name
 
-    def get_ngrams(self, ngram):
-        occurrences = []
-        for occurrence in self.questionoccurrence_set.all().values('word', 'positions'):
-            for position in map(lambda x: int(x), occurrence['positions'].split(',')):
-                occurrences.append((occurrence['word'], position))
-        occurrences = sorted(occurrences, key=lambda occurrence: occurrence[1])
-
-        words = list(map(lambda occurrence: occurrence[0], occurrences))
-        words = Word.objects.filter(id__in=words, is_stop_word=False).values_list('id', flat=True)
-        occurrences = list(filter(lambda occurrence: occurrence[0] in words, occurrences))
-
-        words = []
-        for i in range(0, len(occurrences) - ngram + 1):
-            current_occurrences = occurrences[i:i+ngram]
-            if current_occurrences[-1][1] - current_occurrences[0][1] == ngram - 1:
-                word = list(map(lambda occurrence: occurrence[0], current_occurrences))
-                words.append(tuple(word))
-        return words
-
     def get_words(self, stop_words, top_words):
         words = self.words.split(',')
         words = list(filter(lambda w: w != '', words))
         words = list(map(lambda w: int(w), words))
         words = list(filter(lambda w: w not in stop_words, words))
-        words = np.array(words[:top_words])
-        words = np.concatenate((words, np.zeros(shape=(top_words - words.shape[0]))), axis=0)
+        words = np.array(words[:top_words], dtype=np.uint32)
+        words = np.concatenate((words, np.zeros(shape=(top_words - words.shape[0]), dtype=np.uint32)), axis=0)
         return words
 
 class Answer(models.Model):

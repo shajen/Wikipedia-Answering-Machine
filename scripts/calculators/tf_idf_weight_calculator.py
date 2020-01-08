@@ -7,65 +7,49 @@ import numpy as np
 import tools.results_presenter
 
 class TfIdfWeightCalculator():
-    def __init__(self, debug_top_items, ngram):
-        self.debug_top_items = debug_top_items
-        self.ngram = ngram
-        logging.info('start reading articles')
-        self.articles_count = Article.objects.filter(content_words_count__gte=20).count()
-        logging.info('finish reading')
+    def __init__(self, debug_top_items, ngram_size, data_loader):
+        self.__debug_top_items = debug_top_items
+        self.__ngram_size = ngram_size
+        self.__data_loader = data_loader
+        self.__articles_count = len(data_loader.get_articles_id())
+        self.__questions_words_count = defaultdict(lambda: 0)
         logging.info('start parsing questions')
-        self.questions_words_count = defaultdict(lambda: 0)
-        for question in Question.objects.all():
-            for word in question.get_ngrams(ngram):
-                self.questions_words_count[word] += 1
+        for question_id in data_loader.get_questions_id():
+            for ngram in TfIdfWeightCalculator.get_ngrams(data_loader.get_question_base_words(question_id), self.__ngram_size):
+                self.__questions_words_count[ngram] += 1
         logging.info('finish parsing questions')
 
-    def __get_words(question, debug=False):
-        word_to_representer = {}
-        for occurrence in QuestionOccurrence.objects.filter(question=question):
-            org_word = occurrence.word
-            if org_word.is_stop_word:
-                continue
-            for base_word in list(WordForm.objects.filter(changed_word=org_word.id).values_list('base_word', flat=True)) + [org_word.id]:
-                word_to_representer[base_word] = org_word.id
-                for changed_word in WordForm.objects.filter(base_word_id=base_word).values_list('changed_word', flat=True):
-                    word_to_representer[changed_word] = org_word.id
+    def get_ngrams(words, ngram_size):
+        ngrams = []
+        for i in range(0, len(words) - ngram_size + 1):
+            ngrams.append(tuple(words[i:i+ngram_size]))
+        return ngrams
 
-        if debug:
-            for representer in set(word_to_representer.values()):
-                words = filter(lambda data: data[1] == representer, word_to_representer.items())
-                words = list(map(lambda data: data[0], words))
-                words = Word.objects.filter(id__in=words).values_list('value', flat=True)
-                words = ', '.join(words)
-                logging.debug('%s (%s)' % (Word.objects.get(id=representer), words))
-        return word_to_representer
-
-    def __count_articles(words, word_to_representer, is_title, ngram):
-        articles_words_count = defaultdict(lambda: defaultdict(lambda: 0))
-        # articles_words_positions = defaultdict(defaultdict)
-        articles_positions = defaultdict(list)
-        occurrences = ArticleOccurrence.objects.filter(word_id__in=word_to_representer.keys(), is_title=is_title).values('article_id', 'word_id', 'positions_count', 'positions')
-        for occurrence in occurrences:
-            representer = word_to_representer[occurrence['word_id']]
-            articles_words_count[occurrence['article_id']][representer] += occurrence['positions_count']
-            #if len(positions) == occurrence['positions_count']:
-            positions = [int(p) for p in occurrence['positions'].strip().split(',') if p]
-            # articles_words_positions[occurrence['article_id']][representer] = positions
-            articles_positions[occurrence['article_id']].extend([(p, representer) for p in positions])
-
-        for item_id in articles_positions:
-            articles_positions[item_id].sort(key=lambda d: d[0])
-
+    def __count_articles(question_words, is_title, data_loader, ngram_size):
+        logging.info("questions words: %d" % len(question_words))
         articles_words_count_ngram = defaultdict(lambda: defaultdict(lambda: 0))
         articles_positions_ngram = defaultdict(list)
-        for item_id in articles_positions:
-            for i in range(0, len(articles_positions[item_id]) - ngram + 1):
-                current_positions = articles_positions[item_id][i:i+ngram]
-                if current_positions[-1][0] - current_positions[0][0] == ngram - 1:
-                    word = tuple(list(map(lambda position: position[1], current_positions)))
-                    if word in words:
-                        articles_positions_ngram[item_id].append((current_positions[0][0], word))
-                        articles_words_count_ngram[item_id][word] += 1
+
+        articles_words = data_loader.get_articles_base_words(is_title)
+        articles_mask = np.isin(articles_words, question_words)
+
+        for article_id in data_loader.get_articles_id():
+            words = articles_words[article_id]
+            mask = articles_mask[article_id]
+            if np.any(mask):
+                if ngram_size == 1:
+                    indexes = np.arange(words.shape[0])[mask]
+                    for index in indexes:
+                        ngram = (words[index],)
+                        articles_words_count_ngram[article_id][ngram] += 1
+                        articles_positions_ngram[article_id].append((index, ngram))
+                elif ngram_size == 2:
+                    indexes = np.arange(words.shape[0])[mask]
+                    for i in range(indexes.shape[0]-1):
+                        if indexes[i] + 1 == indexes[i+1]:
+                            ngram = (words[indexes[i]], words[indexes[i+1]])
+                            articles_words_count_ngram[article_id][ngram] += 1
+                            articles_positions_ngram[article_id].append((indexes[i], ngram))
         return (articles_words_count_ngram, articles_positions_ngram)
 
     def __count_idf(articles_count, articles_words_count):
@@ -91,8 +75,9 @@ class TfIdfWeightCalculator():
             try:
                 tf = count / len(words)
                 question_words_weights[word] = tf * questions_words_idf[word]
-                word_string = ', '.join(list(map(lambda x: str(Word.objects.get(id=x)), list(word))))
-                logging.debug(' - %-40s %d %.6f (%3d)' % (word_string, count, question_words_weights[word], questions_words_count[word]))
+                if logging.getLogger().level == logging.DEBUG:
+                    word_string = ', '.join(list(map(lambda x: str(Word.objects.get(id=x)), list(word))))
+                    logging.debug(' - %-40s %d %.6f (%3d)' % (word_string, count, question_words_weights[word], questions_words_count[word]))
             except Exception as e:
                 pass
                 #logging.warning('exception during count question words weights')
@@ -100,13 +85,36 @@ class TfIdfWeightCalculator():
                 #logging.warning('question: %s, word: %s' % (question, word))
         return question_words_weights
 
+    def __print_debug_data(question, question_ngrams, articles_positions):
+        if logging.getLogger().level != logging.DEBUG:
+            return
+
+        logging.info("XXX")
+        logging.debug(question)
+        logging.debug("words count: %d" % len(question_ngrams))
+        for ngram in question_ngrams:
+            logging.debug("ngram: %s" % str(ngram))
+            for word_id in list(ngram):
+                logging.debug("  word: %s" % (Word.objects.get(id=word_id).value))
+
+        for answer in question.answer_set.select_related('article'):
+            article = answer.article
+            logging.debug('')
+            logging.debug(article)
+            logging.debug("words count: %d" % len(articles_positions[article.id]))
+            for (pos, ngram) in articles_positions[article.id]:
+                logging.debug("ngram: %s (pos: %d)" % (str(ngram), pos))
+                for word_id in list(ngram):
+                    logging.debug("  word: %s" % (Word.objects.get(id=word_id).value))
+
     def prepare(self, question, is_title):
         logging.info('preparing')
-        word_to_representer = TfIdfWeightCalculator.__get_words(question, True)
-        words = question.get_ngrams(self.ngram)
-        (self.articles_words_count, self.articles_positions) = TfIdfWeightCalculator.__count_articles(words, word_to_representer, is_title, self.ngram)
-        (self.articles_words_idf, questions_words_idf) = TfIdfWeightCalculator.__count_idf(self.articles_count, self.articles_words_count)
-        self.question_words_weights = TfIdfWeightCalculator.__count_question_words_weights(question, words, self.questions_words_count, questions_words_idf)
+        question_words = self.__data_loader.get_question_base_words(question.id)
+        question_ngrams = TfIdfWeightCalculator.get_ngrams(question_words, self.__ngram_size)
+        (self.__articles_words_count, self.__articles_positions) = TfIdfWeightCalculator.__count_articles(question_words, is_title, self.__data_loader, self.__ngram_size)
+        TfIdfWeightCalculator.__print_debug_data(question, question_ngrams, self.__articles_positions)
+        (self.__articles_words_idf, questions_words_idf) = TfIdfWeightCalculator.__count_idf(self.__articles_count, self.__articles_words_count)
+        self.__question_words_weights = TfIdfWeightCalculator.__count_question_words_weights(question, question_ngrams, self.__questions_words_count, questions_words_idf)
 
     def __dict_to_vector(keys, d):
         v = []
@@ -130,16 +138,16 @@ class TfIdfWeightCalculator():
         comparators_articles_words_weights = defaultdict(lambda: defaultdict(lambda: defaultdict()))
         comparators_articles_weight = defaultdict(lambda: defaultdict())
 
-        filtered_question_words_weights = dict(filter(lambda data: self.articles_words_idf[data[0]] > minimal_word_idf, self.question_words_weights.items()))
-        for item_id in self.articles_words_count:
+        filtered_question_words_weights = dict(filter(lambda data: self.__articles_words_idf[data[0]] > minimal_word_idf, self.__question_words_weights.items()))
+        for item_id in self.__articles_words_count:
             articles_words_set_weights = []
-            words_positions = filter(lambda data: self.articles_words_idf[data[1]] > minimal_word_idf, self.articles_positions[item_id])
-            words_positions = self.articles_positions[item_id]
+            # words_positions = filter(lambda data: self.__articles_words_idf[data[1]] > minimal_word_idf, self.__articles_positions[item_id])
+            words_positions = self.__articles_positions[item_id]
             if sum_neighbors == 0:
                 current_words = map(lambda data: data[1], words_positions)
                 weights = {}
                 for word_id, count in Counter(current_words).items():
-                    weights[word_id] = count / len(self.articles_positions[item_id]) * self.articles_words_idf[word_id]
+                    weights[word_id] = count / len(self.__articles_positions[item_id]) * self.__articles_words_idf[word_id]
                 articles_words_set_weights.append(weights)
             else:
                 counter = defaultdict(lambda: 0)
@@ -157,7 +165,7 @@ class TfIdfWeightCalculator():
 
                     weights = {}
                     for word_id, count in counter.items():
-                        weights[word_id] = count / sum_neighbors * self.articles_words_idf[word_id]
+                        weights[word_id] = count / sum_neighbors * self.__articles_words_idf[word_id]
                     articles_words_set_weights.append(weights)
 
             (question_vector, vectors) = TfIdfWeightCalculator.__convert_to_vector(filtered_question_words_weights, articles_words_set_weights)
@@ -182,4 +190,4 @@ class TfIdfWeightCalculator():
             articles_id = list(articles_weight.keys())
             distances = np.array(list(articles_weight.values()))
             (method, created) = Method.objects.get_or_create(name=comparator.method())
-            tools.results_presenter.ResultsPresenter.present(question, articles_id, distances, method, self.debug_top_items, not comparator.ascending_order())
+            tools.results_presenter.ResultsPresenter.present(question, articles_id, distances, method, self.__debug_top_items, not comparator.ascending_order())

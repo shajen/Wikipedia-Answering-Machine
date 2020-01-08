@@ -21,12 +21,12 @@ import tools.data_loader
 import tools.logger
 import tools.results_presenter
 
-def resolve_questions_tf_idf(args, questions_queue, method):
+def resolve_questions_tf_idf(args, questions_queue, method, data_loader):
     neighbors = list(map(lambda x: int(x), args.neighbors.split(',')))
     minimal_word_idf_weights = list(map(lambda x: float(x), args.minimal_word_idf_weights.split(',')))
     power_factors = list(map(lambda x: int(x), args.power_factors.split(',')))
 
-    tf_idf_calculator = calculators.tf_idf_weight_calculator.TfIdfWeightCalculator(args.debug_top_items, args.ngram)
+    tf_idf_calculator = calculators.tf_idf_weight_calculator.TfIdfWeightCalculator(args.debug_top_items, args.ngram, data_loader)
 
     while True:
         try:
@@ -117,7 +117,7 @@ def start(args, questions, method_name):
     data_loader = tools.data_loader.DataLoader(learning_model_count, classic_model_count, args.word2vec_file, args.word2vec_size)
 
     if args.tfidf_models or args.vector_models:
-        start_callback_threads(args, questions, '%s, type: tfi, title: %d, ngram: %d' % (method_name, args.title, args.ngram), resolve_questions_tf_idf, ())
+        start_callback_threads(args, questions, '%s, type: tfi, title: %d, ngram: %d' % (method_name, args.title, args.ngram), resolve_questions_tf_idf, (data_loader,))
     if args.word2vec_model:
         start_callback_threads(args, questions, '%s, type: w2v, topn: %03d, title: %d' % (method_name, args.topn, args.title), resolve_questions_word2vec, (data_loader,))
     if args.convolution_neural_network:
@@ -161,7 +161,7 @@ def run(*args):
     parser.add_argument("-w2vs", "--word2vec_size", help="size of word2vec vector", type=int, default=100, metavar="n")
 
     parser.add_argument("-T", "--title", help="calculate based on articles title not content", action='store_true')
-    parser.add_argument('-n', '--ngram', help="use ngram mode", type=int, default=1, metavar="ngram")
+    parser.add_argument('-n', '--ngram', help="use ngram mode", type=int, default=1, choices=[1, 2], metavar="ngram")
     parser.add_argument("-N", "--neighbors", help="count tf-idf in every n neighboring words tuple in articles", type=str, default='0', metavar="0,10,20")
     parser.add_argument("-mwiw", "--minimal_word_idf_weights", help="use only words with idf weight above", type=str, default='0.0', metavar="0.0,1.6,3.2")
     parser.add_argument("-pf", "--power_factors", help="use to sum words weight in count article weight", type=str, default='3', metavar="1,2,3,4")
