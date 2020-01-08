@@ -39,10 +39,12 @@ def resolve_questions_tf_idf(args, questions_queue, method, data_loader):
                     if args.tfidf_models:
                         for power_factor in power_factors:
                             comparators.append(calculators.weight_comparator.TfIdfWeightComparator(method_name, neighbor, power_factor))
-                    if args.vector_models:
+                    if args.vector_model_cosine:
                         comparators.append(calculators.weight_comparator.CosineWeightComparator(method_name, neighbor))
-                        comparators.append(calculators.weight_comparator.EuclideanWeightComparator(method_name, neighbor))
+                    if args.vector_model_cityblock:
                         comparators.append(calculators.weight_comparator.CityblockWeightComparator(method_name, neighbor))
+                    if args.vector_model_euclidean:
+                        comparators.append(calculators.weight_comparator.EuclideanWeightComparator(method_name, neighbor))
 
                     comparators = list(filter(lambda comparator: not tools.results_presenter.ResultsPresenter.is_already_solved(question, comparator.method()), comparators))
                     if comparators:
@@ -116,7 +118,7 @@ def start(args, questions, method_name):
     classic_model_count = (args.classic_model_questions_words_count, args.classic_model_articles_title_words_count, args.classic_model_articles_content_words_count)
     data_loader = tools.data_loader.DataLoader(learning_model_count, classic_model_count, args.word2vec_file, args.word2vec_size)
 
-    if args.tfidf_models or args.vector_models:
+    if any([args.tfidf_models, args.vector_model_cosine, args.vector_model_cityblock, args.vector_model_euclidean]):
         start_callback_threads(args, questions, '%s, type: tfi, title: %d, ngram: %d' % (method_name, args.title, args.ngram), resolve_questions_tf_idf, (data_loader,))
     if args.word2vec_model:
         start_callback_threads(args, questions, '%s, type: w2v, topn: %03d, title: %d' % (method_name, args.topn, args.title), resolve_questions_word2vec, (data_loader,))
@@ -177,7 +179,9 @@ def run(*args):
     parser.add_argument("-lm_acwc", "--learning_model_articles_content_words_count", help="use first n words from articles", type=int, default=100)
 
     parser.add_argument("-tm", "--tfidf_models", help="use td-idf models", action='store_true')
-    parser.add_argument("-vm", "--vector_models", help="use vector models", action='store_true')
+    parser.add_argument("-vm_cos", "--vector_model_cosine", help="use cosine vector models", action='store_true')
+    parser.add_argument("-vm_city", "--vector_model_cityblock", help="use cityblock vector models", action='store_true')
+    parser.add_argument("-vm_e", "--vector_model_euclidean", help="use euclidean vector models", action='store_true')
     parser.add_argument("-w2vm", "--word2vec_model", help="use word2vec model", action='store_true')
     parser.add_argument("-cnn", "--convolution_neural_network", help="use onvolution neural network", action='store_true')
     parser.add_argument("-dan", "--deep_averaging_network", help="use deep averaging network", action='store_true')
