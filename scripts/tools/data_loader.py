@@ -51,7 +51,7 @@ class DataLoader():
         logging.info('questions count: %d' % questions_count)
         logging.info('max questions id: %d' % max_questions_id)
 
-        (self.__questions_id, questions_id_ok) = self.__create_or_link('questions_id', (questions_count, question_words), np.uint32)
+        (self.__questions_id, questions_id_ok) = self.__create_or_link('questions_id', (questions_count), np.uint32)
         (self.__questions_words, questions_words_ok) = self.__create_or_link('questions_words', (max_questions_id, question_words), np.uint32)
 
         if questions_words_ok:
