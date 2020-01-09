@@ -103,6 +103,12 @@ class Question(models.Model):
     def __str__(self):
         return self.name
 
+    def corrected_articles(self):
+        return list(map(lambda answer: answer.article, self.answer_set.all()))
+
+    def corrected_articles_id(self):
+        return list(map(lambda article: article.id, self.corrected_articles()))
+
     def get_words(self, stop_words, top_words):
         words = self.words.split(',')
         words = list(filter(lambda w: w != '', words))

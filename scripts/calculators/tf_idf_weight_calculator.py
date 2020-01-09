@@ -15,7 +15,7 @@ class TfIdfWeightCalculator():
         self.__questions_words_count = defaultdict(lambda: 0)
         logging.info('start parsing questions')
         for question_id in data_loader.get_questions_id():
-            for ngram in TfIdfWeightCalculator.get_ngrams(data_loader.get_question_base_words(question_id), self.__ngram_size):
+            for ngram in TfIdfWeightCalculator.get_ngrams(data_loader.get_question_all_words(question_id), self.__ngram_size):
                 self.__questions_words_count[ngram] += 1
         logging.info('finish parsing questions')
 
@@ -30,7 +30,7 @@ class TfIdfWeightCalculator():
         articles_words_count_ngram = defaultdict(lambda: defaultdict(lambda: 0))
         articles_positions_ngram = defaultdict(list)
 
-        articles_words = data_loader.get_articles_base_words(is_title)
+        articles_words = data_loader.get_articles_all_words(is_title)
         articles_mask = np.isin(articles_words, question_words)
 
         for article_id in data_loader.get_articles_id():
@@ -109,7 +109,7 @@ class TfIdfWeightCalculator():
 
     def prepare(self, question, is_title):
         logging.info('preparing')
-        question_words = self.__data_loader.get_question_base_words(question.id)
+        question_words = self.__data_loader.get_question_all_words(question.id)
         question_ngrams = TfIdfWeightCalculator.get_ngrams(question_words, self.__ngram_size)
         (self.__articles_words_count, self.__articles_positions) = TfIdfWeightCalculator.__count_articles(question_words, is_title, self.__data_loader, self.__ngram_size)
         TfIdfWeightCalculator.__print_debug_data(question, question_ngrams, self.__articles_positions)

@@ -14,6 +14,8 @@ class DataLoader():
         (self.__classic_model_questions_words_count, self.__classic_model_articles_title_words_count, self.__classic_model_articles_content_words_count) = classic_model_count
 
         stop_words = set(Word.objects.filter(is_stop_word=True).values_list('id', flat=True))
+        stop_words = set(WordForm.objects.filter(base_word_id__in=stop_words).values_list('changed_word_id', flat=True)) | stop_words
+        logging.info('stop words: %d' % len(stop_words))
         self.__load_base_forms()
         self.__load_words(word2vec_size, 10)
         self.__load_questions(stop_words)
@@ -53,15 +55,15 @@ class DataLoader():
         logging.info('max questions id: %d' % max_questions_id)
 
         (self.__questions_id, questions_id_ok) = self.__create_or_link('questions_id', (questions_count), np.uint32)
-        (self.__questions_words, questions_words_ok) = self.__create_or_link('questions_words', (max_questions_id, self.__learning_model_questions_words_count), np.uint32)
+        # (self.__questions_words, questions_words_ok) = self.__create_or_link('questions_words', (max_questions_id, self.__learning_model_questions_words_count), np.uint32)
         (self.__questions_base_words, questions_base_words_ok) = self.__create_or_link('questions_base_words', (max_questions_id, self.__classic_model_questions_words_count), np.uint32)
 
-        if all([questions_id_ok, questions_words_ok, questions_base_words_ok]):
+        if all([questions_id_ok, questions_base_words_ok]):
             logging.info("data already exists")
             return
 
         self.__questions_id.fill(0)
-        self.__questions_words.fill(0)
+        # self.__questions_words.fill(0)
         self.__questions_base_words.fill(0)
 
         i = 0
@@ -70,7 +72,7 @@ class DataLoader():
             logging.debug('question: %d' % question.id)
             self.__questions_id[i] = question.id
             words = question.get_words(stop_words, self.__classic_model_questions_words_count)
-            self.__questions_words[question.id] = words[:self.__learning_model_questions_words_count]
+            # self.__questions_words[question.id] = words[:self.__learning_model_questions_words_count]
             self.__questions_base_words[question.id] = self.__words_to_base_forms[words]
             i += 1
 
@@ -81,19 +83,19 @@ class DataLoader():
         logging.info('max articles id: %d' % max_articles_id)
 
         (self.__articles_id, articles_id_ok) = self.__create_or_link('articles_id', (articles_count), np.uint32)
-        (self.__articles_title_words, articles_title_words_ok) = self.__create_or_link('articles_title_words', (max_articles_id, self.__learning_model_articles_title_words_count), np.uint32)
+        # (self.__articles_title_words, articles_title_words_ok) = self.__create_or_link('articles_title_words', (max_articles_id, self.__learning_model_articles_title_words_count), np.uint32)
         (self.__articles_title_base_words, articles_title_base_words_ok) = self.__create_or_link('articles_title_base_words', (max_articles_id, self.__classic_model_articles_title_words_count), np.uint32)
-        (self.__articles_content_words, articles_content_words_ok) = self.__create_or_link('articles_content_words', (max_articles_id, self.__learning_model_articles_content_words_count), np.uint32)
+        # (self.__articles_content_words, articles_content_words_ok) = self.__create_or_link('articles_content_words', (max_articles_id, self.__learning_model_articles_content_words_count), np.uint32)
         (self.__articles_content_base_words, articles_content_base_words_ok) = self.__create_or_link('articles_content_base_words', (max_articles_id, self.__classic_model_articles_content_words_count), np.uint32)
 
-        if all([articles_id_ok, articles_title_words_ok, articles_title_base_words_ok, articles_content_words_ok, articles_content_base_words_ok]):
+        if all([articles_id_ok, articles_title_base_words_ok, articles_content_base_words_ok]):
             logging.info("data already exists")
             return
 
         self.__articles_id.fill(0)
-        self.__articles_title_words.fill(0)
+        # self.__articles_title_words.fill(0)
         self.__articles_title_base_words.fill(0)
-        self.__articles_content_words.fill(0)
+        # self.__articles_content_words.fill(0)
         self.__articles_content_base_words.fill(0)
 
         i = 0
@@ -103,8 +105,8 @@ class DataLoader():
             self.__articles_id[i] = article.id
             title_words = article.get_words(True, stop_words, self.__classic_model_articles_title_words_count)
             content_words = article.get_words(False, stop_words, self.__classic_model_articles_content_words_count)
-            self.__articles_title_words[article.id] = title_words[:self.__learning_model_articles_title_words_count]
-            self.__articles_content_words[article.id] = content_words[:self.__learning_model_articles_content_words_count]
+            # self.__articles_title_words[article.id] = title_words[:self.__learning_model_articles_title_words_count]
+            # self.__articles_content_words[article.id] = content_words[:self.__learning_model_articles_content_words_count]
             self.__articles_title_base_words[article.id] = self.__words_to_base_forms[title_words]
             self.__articles_content_base_words[article.id] = self.__words_to_base_forms[content_words]
             i += 1
@@ -136,7 +138,10 @@ class DataLoader():
             logging.info("data already exists")
             return
 
-        self.__words_to_vec[:] = np.nan
+        self.__words_to_vec.fill(np.nan)
+        # np.random.seed(10)
+        # self.__words_to_vec[:] = np.random.normal(0.0, 1.0, size=(max_words_id, word2vec_size))[:]
+        # self.__words_to_vec[0].fill(0.0)
 
         self.__load_word2vec_model()
         logging.info('loading words vectors')
@@ -175,10 +180,10 @@ class DataLoader():
         return set(Word.objects.filter(value__in=similar_words).values_list('id', flat=True)) | words
 
     def get_words_base_forms(self, words):
-        return set(WordForm.objects.filter(changed_word_id__in=words).values_list('base_word_id', flat=True)) | words
+        return set(WordForm.objects.filter(changed_word_id__in=words).values_list('base_word_id', flat=True))
 
     def get_words_changed_forms(self, words):
-        return set(WordForm.objects.filter(base_word_id__in=words).values_list('changed_word_id', flat=True)) | words
+        return set(WordForm.objects.filter(base_word_id__in=words).values_list('changed_word_id', flat=True))
 
     def get_words_data(self, words):
         return self.__words_to_vec[words]
@@ -186,29 +191,38 @@ class DataLoader():
     def get_questions_id(self):
         return self.__questions_id
 
-    def get_question_words_id(self, question_id):
-        return self.__questions_words[question_id]
+    def get_question_words_id(self, trimmed, question_id):
+        words = self.__questions_base_words[question_id][:self.__learning_model_questions_words_count]
+        if trimmed:
+            words = self.__trimmed_words(words)
+        return words
 
     def get_articles_id(self):
         return self.__articles_id
 
-    def get_article_words_id(self, article_id, is_title):
+    def get_article_words_id(self, trimmed, article_id, is_title):
         if is_title:
-            return self.__articles_title_words[article_id]
+            words = self.__articles_title_base_words[article_id][:self.__learning_model_articles_title_words_count]
         else:
-            return self.__articles_content_words[article_id]
+            words = self.__articles_content_base_words[article_id][:self.__learning_model_articles_content_words_count]
+        if trimmed:
+            words = self.__trimmed_words(words)
+        return words
 
-    def __words_to_base_words_trimmed(self, words):
+    def __trimmed_words(self, words):
         index = np.nonzero(words == 0)[0]
         if index.size:
             return words[:index[0]]
         else:
-            return np.array([])
+            if words.size:
+                return words
+            else:
+                return np.array([])
 
-    def get_question_base_words(self, question_id):
-        return self.__words_to_base_words_trimmed(self.__questions_base_words[question_id])
+    def get_question_all_words(self, question_id):
+        return self.__trimmed_words(self.__questions_base_words[question_id])
 
-    def get_articles_base_words(self, is_title):
+    def get_articles_all_words(self, is_title):
         if is_title:
             return self.__articles_title_base_words
         else:

@@ -17,29 +17,47 @@ class Word2VecWeightCalculator():
             return np.nanmean(data, axis=0)
 
     def __prepare_question(self, question):
-        return self.__mean(self.__data_loader.get_words_data(self.__data_loader.get_question_words_id(question.id)))
+        words = self.__data_loader.get_question_words_id(True, question.id)
+        vectors = self.__data_loader.get_words_data(words)
+        if logging.getLogger().level == logging.DEBUG:
+            ResultsPresenter.log_question(question.id)
+            ResultsPresenter.log_words(words)
+            # logging.debug(vectors)
+        return self.__mean(vectors)
 
     def __prepare_articles(self, question, is_title, topn):
         logging.info('preparing articles data')
-        question_words = set(self.__data_loader.get_question_words_id(question.id))
-        if 0 in question_words:
-            question_words.remove(0)
-        logging.info('words set count: %d' % len(question_words))
-        question_words = self.__data_loader.get_words_base_forms(question_words)
-        logging.info('words set count: %d' % len(question_words))
-        question_words = self.__data_loader.get_words_similar_words(question_words, topn)
-        logging.info('words set count: %d' % len(question_words))
-        question_words = self.__data_loader.get_words_changed_forms(question_words)
-        logging.info('words set count: %d' % len(question_words))
-        question_words = np.array(list(question_words))
+        if topn < 999:
+            question_words = set(self.__data_loader.get_question_words_id(True, question.id))
+            if topn > 0:
+                # logging.info('words set count: %d' % len(question_words))
+                # question_words = self.__data_loader.get_words_base_forms(question_words)
+                logging.info('words set count: %d' % len(question_words))
+                question_words = self.__data_loader.get_words_changed_forms(question_words) | question_words
+                logging.info('words set count: %d' % len(question_words))
+                question_words = self.__data_loader.get_words_similar_words(question_words, topn)
+                logging.info('words set count: %d' % len(question_words))
+                question_words = self.__data_loader.get_words_changed_forms(question_words) | question_words
+                logging.info('words set count: %d' % len(question_words))
+                question_words = self.__data_loader.get_words_base_forms(question_words)
+            logging.info('words set count: %d' % len(question_words))
+            # ResultsPresenter.log_words(question_words)
+            question_words = np.array(list(question_words))
         articles_id = []
         articles_data = []
+        if logging.getLogger().level == logging.DEBUG:
+            corrected_articles_id = question.corrected_articles_id()
         for article_id in self.__data_loader.get_articles_id():
-            words = self.__data_loader.get_article_words_id(article_id, is_title)
+            words = self.__data_loader.get_article_words_id(True, article_id, is_title)
             if topn < 999:
                 words = np.intersect1d(words, question_words)
             if words.size:
                 data = self.__data_loader.get_words_data(words)
+                if logging.getLogger().level == logging.DEBUG:
+                    if article_id in corrected_articles_id:
+                        ResultsPresenter.log_article(article_id)
+                        ResultsPresenter.log_words(words)
+                        # logging.debug(data)
                 if not np.isnan(data).all():
                     articles_id.append(article_id)
                     articles_data.append(np.nanmean(data, axis=0))

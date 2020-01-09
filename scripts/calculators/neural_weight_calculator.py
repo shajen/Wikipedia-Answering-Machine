@@ -36,7 +36,7 @@ class NeuralWeightCalculator():
         current = 0
         step = max(1, round(total / (10 if is_title else 100)))
         for article_id in articles_id:
-            words = self.__data_loader.get_article_words_id(article_id, is_title)
+            words = self.__data_loader.get_article_words_id(False, article_id, is_title)
             data[current] = np.nan_to_num(self.__data_loader.get_words_data(words))
             current += 1
             if current % step == 0 and show_progress:
@@ -52,7 +52,7 @@ class NeuralWeightCalculator():
         current = 1
         step = max(1, round(total / 10))
         for question_id in questions_id:
-            words = self.__data_loader.get_question_words_id(question_id)
+            words = self.__data_loader.get_question_words_id(False, question_id)
             data.append(np.nan_to_num(self.__data_loader.get_words_data(words)))
             current += 1
             if (current % step == 0):

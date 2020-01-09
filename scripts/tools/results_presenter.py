@@ -60,3 +60,25 @@ class ResultsPresenter():
             return Solution.objects.filter(method=method, answer_id__in=answers).count() == len(answers)
         except Exception as e:
             return False
+
+    def log_article(article_id):
+        if logging.getLogger().level != logging.DEBUG:
+            return
+
+        article = Article.objects.get(id=article_id)
+        logging.debug('article: %7d, %s' % (article.id, article.title))
+
+    def log_question(question_id):
+        if logging.getLogger().level != logging.DEBUG:
+            return
+
+        question = Question.objects.get(id=question_id)
+        logging.debug('question: %7d, %s' % (question.id, question.name))
+
+    def log_words(words_id):
+        if logging.getLogger().level != logging.DEBUG:
+            return
+
+        logging.debug('words count: %d' % len(words_id))
+        for word in words_id:
+            logging.debug('  word %7d: %s' % (word, Word.objects.get(id=word).value))
