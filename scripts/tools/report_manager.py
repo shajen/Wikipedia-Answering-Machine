@@ -45,6 +45,7 @@ class ReportManager():
     def calculateMethodsQuestionsPositions(self, args, questions_id, methods_id):
         methods_questions_positions = defaultdict(lambda: defaultdict(set))
         methods_solutions_count = defaultdict(int)
+        methods_mrp = defaultdict(float)
         question_id = 0
         answers = Answer.objects.filter(question_id__in=questions_id).values_list('id', flat=True)
         for solution in Solution.objects.filter(answer_id__in=answers, method_id__in=methods_id).values('position', 'method_id'):
@@ -56,18 +57,22 @@ class ReportManager():
                 continue
             methods_questions_positions[method_id][question_id].add(position)
             methods_solutions_count[method_id] += 1
-        return (methods_questions_positions, methods_solutions_count)
+            methods_mrp[method_id] += 1.0 / position
+        for method_id in methods_mrp:
+            methods_mrp[method_id] = methods_mrp[method_id] / methods_solutions_count[method_id]
+        return (methods_questions_positions, methods_solutions_count, methods_mrp)
 
     def printErrorRate(self, args, name, questions_id):
         if args['all']:
             methods = Method.objects.filter(name__contains=args['methodPatterns']).order_by('name')
         else:
             methods = Method.objects.filter(name__contains=args['methodPatterns'], is_enabled=True).order_by('name')
-        (methods_questions_positions, methods_solutions_count) = self.calculateMethodsQuestionsPositions(args, questions_id, methods.values_list('id', flat=True))
+        (methods_questions_positions, methods_solutions_count, methods_mrp) = self.calculateMethodsQuestionsPositions(args, questions_id, methods.values_list('id', flat=True))
         LEN = 105
-        sys.stdout.write(name.ljust(LEN + 7) + '     #')
+        sys.stdout.write(name.ljust(LEN + 9) + '     #')
         for t in args['tops']:
             sys.stdout.write('  %6d' % t)
+        sys.stdout.write('MRP'.rjust(8))
         sys.stdout.write('\n')
         for method in methods:
             sort_sign = colored('<', 'green', attrs={"bold"}) if method.is_smaller_first else colored('>', 'red', attrs={"bold"})
@@ -92,6 +97,7 @@ class ReportManager():
                     sys.stdout.write("        ")
                 else:
                     sys.stdout.write("  %.4f" % weight)
+            sys.stdout.write("  %.4f" % methods_mrp[method.id])
             sys.stdout.write('\n')
 
     def printQuestions(self, args):
