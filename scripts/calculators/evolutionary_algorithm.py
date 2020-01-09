@@ -191,7 +191,7 @@ class EvolutionaryAlgorithm():
         return self.__score(individual, data, True)
 
     def __solve(self, population, data, method_name, debug_top_items):
-        method, created = Method.objects.get_or_create(name=method_name)
+        method, created = Method.objects.get_or_create(name=method_name, is_smaller_first=False)
         individual = deap.tools.selBest(population, k=1)[0]
         for question_id in data:
             question = Question.objects.get(id=question_id)

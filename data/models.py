@@ -90,6 +90,7 @@ class Method(models.Model):
     name = models.CharField(max_length=255, unique=True)
     added_date = models.DateTimeField(auto_now_add=True)
     is_enabled = models.BooleanField(default=True, db_index=True)
+    is_smaller_first = models.BooleanField()
 
     def __str__(self):
         return self.name

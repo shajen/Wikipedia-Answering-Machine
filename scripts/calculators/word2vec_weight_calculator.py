@@ -73,7 +73,7 @@ class Word2VecWeightCalculator():
 
     def calculate(self, question, method_name, is_title, topn):
         logging.info('calculating')
-        method, created = Method.objects.get_or_create(name=method_name)
+        method, created = Method.objects.get_or_create(name=method_name, is_smaller_first=True)
         question_data = self.__prepare_question(question)
         if topn >= 999:
             try:

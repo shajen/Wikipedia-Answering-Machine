@@ -189,5 +189,5 @@ class TfIdfWeightCalculator():
             (articles_words_weight, articles_weight) = (comparators_articles_words_weight[comparator.method()], comparators_articles_weight[comparator.method()])
             articles_id = list(articles_weight.keys())
             distances = np.array(list(articles_weight.values()))
-            (method, created) = Method.objects.get_or_create(name=comparator.method())
+            (method, created) = Method.objects.get_or_create(name=comparator.method(), is_smaller_first=not comparator.ascending_order())
             tools.results_presenter.ResultsPresenter.present(question, articles_id, distances, method, self.__debug_top_items, not comparator.ascending_order())

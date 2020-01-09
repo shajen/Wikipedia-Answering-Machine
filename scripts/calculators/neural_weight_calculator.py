@@ -312,7 +312,7 @@ class NeuralWeightCalculator():
         ResultsPresenter.present(Question.objects.get(id=question_id), list(articles_id), articles_weight, method, self.__debug_top_items, False)
 
     def __full_test_questions(self, method_name, question_id, articles_id, articles_output, questions_model, bypass_model):
-        test_method, created = Method.objects.get_or_create(name=method_name)
+        test_method, created = Method.objects.get_or_create(name=method_name, is_smaller_first=False)
         questions_data = self.__prepare_questions(np.array([question_id]), self.__questions_words)
         questions_output = questions_model.predict(questions_data, batch_size=64, verbose=0)
         self.__full_test_article(test_method, bypass_model, question_id, questions_output[0], articles_id, articles_output)

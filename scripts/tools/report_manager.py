@@ -70,6 +70,7 @@ class ReportManager():
             sys.stdout.write('  %6d' % t)
         sys.stdout.write('\n')
         for method in methods:
+            sort_sign = colored('<', 'green', attrs={"bold"}) if method.is_smaller_first else colored('>', 'red', attrs={"bold"})
             answersCount = methods_solutions_count[method.id]
             if answersCount == 0:
                 continue
@@ -79,9 +80,9 @@ class ReportManager():
             if all(len(list(filter(lambda x: x <= t, positions)))/answersCount <= args['hideScoreTreshold'] for t in args['tops']):
                 continue
             if len(method.name) <= LEN:
-                sys.stdout.write("#%5d %s %5d" % (method.id, self.methodColor(method.name.ljust(LEN)), answersCount))
+                sys.stdout.write("#%5d %s %s %5d" % (method.id, sort_sign, self.methodColor(method.name.ljust(LEN)), answersCount))
             else:
-                sys.stdout.write("#%5d %s\n" % (method.id, self.methodColor(method.name)))
+                sys.stdout.write("#%5d %s %s\n" % (method.id, sort_sign, self.methodColor(method.name)))
                 sys.stdout.write('%s %5d' % (' ' * LEN, answersCount))
 
             for t in args['tops']:
