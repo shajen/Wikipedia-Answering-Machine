@@ -6,7 +6,7 @@ import numpy as np
 import SharedArray
 
 class DataLoader():
-    def __init__(self, learning_model_count, classic_model_count, word2vec_file, word2vec_size):
+    def __init__(self, learning_model_count, classic_model_count, word2vec_file, word2vec_size, word2vec_random):
         logging.info('data loader initializing')
         self.__word2vec_file = word2vec_file
         self.__word2vec_size = word2vec_size
@@ -17,7 +17,7 @@ class DataLoader():
         stop_words = set(WordForm.objects.filter(base_word_id__in=stop_words).values_list('changed_word_id', flat=True)) | stop_words
         logging.info('stop words: %d' % len(stop_words))
         self.__load_base_forms()
-        self.__load_words(word2vec_size, 10)
+        self.__load_words(word2vec_size, word2vec_random, 10)
         self.__load_questions(stop_words)
         self.__load_articles(stop_words)
 
@@ -127,7 +127,7 @@ class DataLoader():
         for (base_word_id, changed_word_id) in WordForm.objects.order_by('base_word_id').values_list('base_word_id', 'changed_word_id'):
             self.__words_to_base_forms[changed_word_id] = base_word_id
 
-    def __load_words(self, word2vec_size, similar_words_top_n):
+    def __load_words(self, word2vec_size, word2vec_random, similar_words_top_n):
         words_count = Word.objects.count()
         max_words_id = Word.objects.order_by('-id')[0].id + 1
         logging.info('words count: %d' % words_count)
@@ -138,10 +138,12 @@ class DataLoader():
             logging.info("data already exists")
             return
 
-        self.__words_to_vec.fill(np.nan)
-        # np.random.seed(10)
-        # self.__words_to_vec[:] = np.random.normal(0.0, 1.0, size=(max_words_id, word2vec_size))[:]
-        # self.__words_to_vec[0].fill(0.0)
+        if word2vec_random:
+            np.random.seed(10)
+            self.__words_to_vec[:] = np.random.normal(0.0, 1.0, size=(max_words_id, word2vec_size))[:]
+            self.__words_to_vec[0].fill(0.0)
+        else:
+            self.__words_to_vec.fill(np.nan)
 
         self.__load_word2vec_model()
         logging.info('loading words vectors')

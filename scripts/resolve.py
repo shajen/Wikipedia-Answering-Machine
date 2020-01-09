@@ -116,7 +116,7 @@ def start_learning_model(args, questions, model, method_name):
 def start(args, questions, method_name):
     learning_model_count = (args.learning_model_questions_words_count, args.learning_model_articles_title_words_count, args.learning_model_articles_content_words_count)
     classic_model_count = (args.classic_model_questions_words_count, args.classic_model_articles_title_words_count, args.classic_model_articles_content_words_count)
-    data_loader = tools.data_loader.DataLoader(learning_model_count, classic_model_count, args.word2vec_file, args.word2vec_size)
+    data_loader = tools.data_loader.DataLoader(learning_model_count, classic_model_count, args.word2vec_file, args.word2vec_size, args.word2vec_random)
 
     if any([args.tfidf_models, args.vector_model_cosine, args.vector_model_cityblock, args.vector_model_euclidean]):
         start_callback_threads(args, questions, '%s, type: tfi, title: %d, ngram: %d' % (method_name, args.title, args.ngram), resolve_questions_tf_idf, (data_loader,))
@@ -161,6 +161,7 @@ def run(*args):
     parser.add_argument("-cd", "--cache_directory", help="directory to save and read cache data", type=str)
     parser.add_argument("-w2vf", "--word2vec_file", help="path to word2vec model", type=str, default='', metavar="file")
     parser.add_argument("-w2vs", "--word2vec_size", help="size of word2vec vector", type=int, default=100, metavar="n")
+    parser.add_argument("-w2vr", "--word2vec_random", help="randomize word vector if not found in dataset", action='store_true')
 
     parser.add_argument("-T", "--title", help="calculate based on articles title not content", action='store_true')
     parser.add_argument('-n', '--ngram', help="use ngram mode", type=int, default=1, choices=[1, 2], metavar="ngram")
