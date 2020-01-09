@@ -6,7 +6,7 @@ import numpy as np
 import SharedArray
 
 class DataLoader():
-    def __init__(self, learning_model_count, classic_model_count, word2vec_file, word2vec_size, word2vec_random):
+    def __init__(self, learning_model_count, classic_model_count, word2vec_file, word2vec_size, word2vec_random, extend_stop_words):
         logging.info('data loader initializing')
         self.__word2vec_file = word2vec_file
         self.__word2vec_size = word2vec_size
@@ -14,7 +14,8 @@ class DataLoader():
         (self.__classic_model_questions_words_count, self.__classic_model_articles_title_words_count, self.__classic_model_articles_content_words_count) = classic_model_count
 
         stop_words = set(Word.objects.filter(is_stop_word=True).values_list('id', flat=True))
-        stop_words = set(WordForm.objects.filter(base_word_id__in=stop_words).values_list('changed_word_id', flat=True)) | stop_words
+        if extend_stop_words:
+            stop_words = set(WordForm.objects.filter(base_word_id__in=stop_words).values_list('changed_word_id', flat=True)) | stop_words
         logging.info('stop words: %d' % len(stop_words))
         self.__load_base_forms()
         self.__load_words(word2vec_size, word2vec_random, 10)
