@@ -12,7 +12,7 @@ class NeuralWeightCalculator():
     __ARTICLES_CHUNKS = 100
     __FILTERS = 64
 
-    def __init__(self, data_loader, debug_top_items, workdir, good_bad_ratio):
+    def __init__(self, data_loader, debug_top_items, workdir, good_bad_ratio, method_id):
         self.__data_loader = data_loader
         self.__debug_top_items = debug_top_items
         self.__workdir = workdir
@@ -22,6 +22,7 @@ class NeuralWeightCalculator():
         self.__articles_content_words = data_loader.articles_content_words_count()
         self.__good_bad_ratio = good_bad_ratio
         self.__dataset_loaded = False
+        self.__method_id = method_id
 
     def __colored(self, text, colour):
         return colored(text, colour, attrs={'bold'})
@@ -74,6 +75,19 @@ class NeuralWeightCalculator():
         logging.debug("data size: %s" % str(data.shape))
         return data
 
+    def __get_bad_articles_id(self, questions_id, good_articles_id):
+        if self.__method_id == 0:
+            return list(Article.objects.exclude(id__in=good_articles_id).order_by('?').values_list('id', flat=True)[:self.__good_bad_ratio * len(good_articles_id)])
+        else:
+            is_smaller_first = Method.objects.get(id=self.__method_id).is_smaller_first
+            articles_id = []
+            for question_id in questions_id:
+                corrected_articles_id = Answer.objects.filter(question_id=question_id).values_list('article_id', flat=True)
+                count = self.__good_bad_ratio * len(corrected_articles_id)
+                order_by = 'weight' if is_smaller_first else '-weight'
+                articles_id.extend(Rate.objects.filter(method_id=self.__method_id, question_id=question_id).exclude(article_id__in=corrected_articles_id).order_by(order_by)[:count].values_list('article_id', flat=True))
+            return articles_id
+
     def __generate_dataset_with_questions(self, questions, dataset_name):
         logging.info('generating dataset: %s' % dataset_name)
 
@@ -86,7 +100,7 @@ class NeuralWeightCalculator():
         good_articles_id = list(reduce(lambda x, y: x + y, good_articles_id, []))
         logging.debug('good articles: %d' % len(good_articles_id))
 
-        bad_articles_id = list(Article.objects.exclude(id__in=good_articles_id).order_by('?').values_list('id', flat=True)[:self.__good_bad_ratio * len(good_articles_id)])
+        bad_articles_id = self.__get_bad_articles_id(list(map(lambda q: q.id, questions)), good_articles_id)
         logging.debug('bad articles: %d' % len(bad_articles_id))
 
         articles_id = np.concatenate((np.array(good_articles_id), np.array(bad_articles_id)))

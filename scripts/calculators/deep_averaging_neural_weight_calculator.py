@@ -2,8 +2,8 @@ import calculators.neural_weight_calculator
 import tensorflow as tf
 
 class DeepAveragingNeuralWeightCalculator(calculators.neural_weight_calculator.NeuralWeightCalculator):
-    def __init__(self, data_loader, debug_top_items, workdir, good_bad_ratio):
-        calculators.neural_weight_calculator.NeuralWeightCalculator.__init__(self, data_loader, debug_top_items, workdir, good_bad_ratio)
+    def __init__(self, data_loader, debug_top_items, workdir, good_bad_ratio, method_id):
+        calculators.neural_weight_calculator.NeuralWeightCalculator.__init__(self, data_loader, debug_top_items, workdir, good_bad_ratio, method_id)
 
     def _words_layers(self, filters, input):
         return tf.math.reduce_mean(input, 1)

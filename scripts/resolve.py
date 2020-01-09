@@ -123,13 +123,13 @@ def start(args, questions, method_name):
     if args.word2vec_model:
         start_callback_threads(args, questions, '%s, type: w2v, topn: %03d, title: %d' % (method_name, args.topn, args.title), resolve_questions_word2vec, (data_loader,))
     if args.convolution_neural_network:
-        model = calculators.neural_weight_calculator.NeuralWeightCalculator(data_loader, args.debug_top_items, args.cache_directory, args.neural_model_good_bad_ratio)
+        model = calculators.neural_weight_calculator.NeuralWeightCalculator(data_loader, args.debug_top_items, args.cache_directory, args.neural_model_good_bad_ratio, args.neural_model_method)
         start_learning_model(args, questions, model, '%s, type: cnn' % (method_name))
     if args.deep_averaging_network:
-        model = calculators.deep_averaging_neural_weight_calculator.DeepAveragingNeuralWeightCalculator(data_loader, args.debug_top_items, args.cache_directory, args.neural_model_good_bad_ratio)
+        model = calculators.deep_averaging_neural_weight_calculator.DeepAveragingNeuralWeightCalculator(data_loader, args.debug_top_items, args.cache_directory, args.neural_model_good_bad_ratio, args.neural_model_method)
         start_learning_model(args, questions, model, '%s, type: dan' % (method_name))
     if args.evolutionary_algorithm:
-        model = calculators.evolutionary_algorithm.EvolutionaryAlgorithm(args.debug_top_items, args.cache_directory, args.evolutionary_algorithm_methods_patterns, args.evolutionary_algorithm_population)
+        model = calculators.evolutionary_algorithm.EvolutionaryAlgorithm(args.debug_top_items, args.cache_directory, args.evolutionary_algorithm_methods_patterns, args.evolutionary_algorithm_population, args.neural_model_method)
         start_learning_model(args, questions, model, '%s, type: ean, p: %04d' % (method_name, args.evolutionary_algorithm_population))
     logging.info('finish')
 
@@ -186,6 +186,7 @@ def run(*args):
     parser.add_argument("-cnn", "--convolution_neural_network", help="use onvolution neural network", action='store_true')
     parser.add_argument("-dan", "--deep_averaging_network", help="use deep averaging network", action='store_true')
     parser.add_argument("-nm_gbr", "--neural_model_good_bad_ratio", help="ratio between good and bad articles", type=int, default=1)
+    parser.add_argument("-nm_m", "--neural_model_method", help="use method id to choose article id", type=int, default=0)
     parser.add_argument("-ea", "--evolutionary_algorithm", help="enable evolutionary algorithm model", action='store_true')
     parser.add_argument("-ea_p", "--evolutionary_algorithm_population", help="population size", type=int, default=100)
     parser.add_argument("-ea_mp", "--evolutionary_algorithm_methods_patterns", help="methods patterns used in model", type=str, default='', metavar="method1,method2")
