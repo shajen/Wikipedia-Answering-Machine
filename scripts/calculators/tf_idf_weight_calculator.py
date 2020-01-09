@@ -30,26 +30,34 @@ class TfIdfWeightCalculator():
         articles_words_count_ngram = defaultdict(lambda: defaultdict(lambda: 0))
         articles_positions_ngram = defaultdict(list)
 
-        articles_words = data_loader.get_articles_all_words(is_title)
-        articles_mask = np.isin(articles_words, question_words)
+        chunk_size = 500000
+        chunk = 0
+        total_index = data_loader.get_articles_id()[-1]
+        while chunk * chunk_size < total_index:
+            start_index = chunk * chunk_size
+            stop_index = (chunk + 1) * chunk_size
+            articles_words = data_loader.get_articles_all_words(is_title)[start_index:stop_index]
+            articles_mask = np.isin(articles_words, question_words)
 
-        for article_id in data_loader.get_articles_id():
-            words = articles_words[article_id]
-            mask = articles_mask[article_id]
-            if np.any(mask):
-                if ngram_size == 1:
-                    indexes = np.arange(words.shape[0])[mask]
-                    for index in indexes:
-                        ngram = (words[index],)
-                        articles_words_count_ngram[article_id][ngram] += 1
-                        articles_positions_ngram[article_id].append((index, ngram))
-                elif ngram_size == 2:
-                    indexes = np.arange(words.shape[0])[mask]
-                    for i in range(indexes.shape[0]-1):
-                        if indexes[i] + 1 == indexes[i+1]:
-                            ngram = (words[indexes[i]], words[indexes[i+1]])
-                            articles_words_count_ngram[article_id][ngram] += 1
-                            articles_positions_ngram[article_id].append((indexes[i], ngram))
+            for article_id in data_loader.get_articles_id():
+                if start_index <= article_id and article_id < stop_index:
+                    words = articles_words[article_id - start_index]
+                    mask = articles_mask[article_id - start_index]
+                    if np.any(mask):
+                        if ngram_size == 1:
+                            indexes = np.arange(words.shape[0])[mask]
+                            for index in indexes:
+                                ngram = (words[index],)
+                                articles_words_count_ngram[article_id][ngram] += 1
+                                articles_positions_ngram[article_id].append((index, ngram))
+                        elif ngram_size == 2:
+                            indexes = np.arange(words.shape[0])[mask]
+                            for i in range(indexes.shape[0]-1):
+                                if indexes[i] + 1 == indexes[i+1]:
+                                    ngram = (words[indexes[i]], words[indexes[i+1]])
+                                    articles_words_count_ngram[article_id][ngram] += 1
+                                    articles_positions_ngram[article_id].append((indexes[i], ngram))
+            chunk += 1
         return (articles_words_count_ngram, articles_positions_ngram)
 
     def __count_idf(articles_count, articles_words_count):
