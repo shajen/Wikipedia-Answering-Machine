@@ -26,6 +26,8 @@ def run(*args):
     parser.add_argument("-hs", "--hide_score", help="hide score below treshlod", type=float, default=0.0, metavar='f')
     parser.add_argument("-snf", "--show_not_found", help="show not found answers", action='store_true')
     parser.add_argument("-nc", "--no_color", help="switch off color", action='store_true')
+    parser.add_argument("-dp", "--dataset_proportion", help="proportion of train:validate:test dataset", type=str, default='')
+    parser.add_argument("-a", "--all", help="list all methods", action='store_true')
     parser.add_argument('-v', '--verbose', action='count', default=0)
     args = parser.parse_args(args)
 
@@ -41,5 +43,7 @@ def run(*args):
         'questionCount' : args.question_count,
         'showNotFound' : args.show_not_found,
         'hideScoreTreshold' : args.hide_score,
+        'all' : args.all,
+        'dataset_proportion' : args.dataset_proportion,
         }
     qam.process(data)

@@ -10,6 +10,15 @@ class ReportManager():
     def __init__ (self, no_color):
         self.no_color = no_color
 
+    def split_questions(questions, dataset_proportion):
+        values = list(map(lambda n: int(n), dataset_proportion.split(':')))
+        train_dataset_count = round(len(questions) * values[0] / sum(values))
+        validate_dataset_count = round(len(questions) * values[1] / sum(values))
+        train_dataset = questions[:train_dataset_count]
+        validate_dataset = questions[train_dataset_count:train_dataset_count+validate_dataset_count]
+        test_dataset = questions[train_dataset_count+validate_dataset_count:]
+        return (train_dataset, validate_dataset, test_dataset)
+
     def methodColor(self, name):
         if self.no_color:
             return name
@@ -22,14 +31,23 @@ class ReportManager():
 
     def process(self, args):
         logging.info("process with top answers (%s)" % ', '.join(str(x) for x in args['tops']))
-        self.printErrorRate(args)
+        questions_id = Question.objects.values_list('id', flat=True)
+        if args['dataset_proportion']:
+            (train_dataset, validate_dataset, test_dataset) = ReportManager.split_questions(questions_id, args['dataset_proportion'])
+            self.printErrorRate(args, "train dataset: %d" % len(train_dataset), train_dataset)
+            self.printErrorRate(args, "validate dataset: %d" % len(validate_dataset), validate_dataset)
+            self.printErrorRate(args, "test dataset: %d" % len(test_dataset), test_dataset)
+        else:
+            self.printErrorRate(args, 'all', questions_id)
         self.printQuestions(args)
         logging.info("finish")
 
-    def calculateMethodsQuestionsPositions(self, args):
+    def calculateMethodsQuestionsPositions(self, args, questions_id, methods_id):
         methods_questions_positions = defaultdict(lambda: defaultdict(set))
+        methods_solutions_count = defaultdict(int)
         question_id = 0
-        for solution in Solution.objects.values('position', 'method_id'):#$all():
+        answers = Answer.objects.filter(question_id__in=questions_id).values_list('id', flat=True)
+        for solution in Solution.objects.filter(answer_id__in=answers, method_id__in=methods_id).values('position', 'method_id'):
             position = solution['position']
             method_id = solution['method_id']
             # question_id = solution.answer.question.id
@@ -37,17 +55,22 @@ class ReportManager():
             if not args['showNotFound'] and position == 10**9:
                 continue
             methods_questions_positions[method_id][question_id].add(position)
-        return methods_questions_positions
+            methods_solutions_count[method_id] += 1
+        return (methods_questions_positions, methods_solutions_count)
 
-    def printErrorRate(self, args):
-        methods_questions_positions = self.calculateMethodsQuestionsPositions(args)
+    def printErrorRate(self, args, name, questions_id):
+        if args['all']:
+            methods = Method.objects.filter(name__contains=args['methodPatterns']).order_by('name')
+        else:
+            methods = Method.objects.filter(name__contains=args['methodPatterns'], is_enabled=True).order_by('name')
+        (methods_questions_positions, methods_solutions_count) = self.calculateMethodsQuestionsPositions(args, questions_id, methods.values_list('id', flat=True))
         LEN = 105
-        sys.stdout.write(' ' * (LEN + 7) + '     #')
+        sys.stdout.write(name.ljust(LEN + 7) + '     #')
         for t in args['tops']:
             sys.stdout.write('  %6d' % t)
         sys.stdout.write('\n')
-        for method in Method.objects.filter(name__contains=args['methodPatterns']).order_by('name').all():
-            answersCount = method.solution_set.count()
+        for method in methods:
+            answersCount = methods_solutions_count[method.id]
             if answersCount == 0:
                 continue
             positions = methods_questions_positions[method.id].values()
@@ -75,7 +98,11 @@ class ReportManager():
             return
         print('')
         articles = defaultdict(set)
-        for method in Method.objects.order_by('name').all():
+        if args.all:
+            methods = Method.objects.filter(name__contains=args['methodPatterns']).order_by('name')
+        else:
+            methods = Method.objects.filter(name__contains=args['methodPatterns'], is_enabled=True).order_by('name')
+        for method in methods:
             print("method %s" % self.methodColor(method.name))
             data = defaultdict(list)
             questions_positions = defaultdict(set)
