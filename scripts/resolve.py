@@ -107,11 +107,11 @@ def start_learning_model(args, questions, model, method_name):
     model.train(train_questions, validate_questions, test_questions, args.epoch)
     if not args.disable_testing:
         logging.info('prepare for testing model: %s' % model.model_name())
-        model.prepare_for_testing()
-        logging.info('testing model: %s' % model.model_name())
-        for question in questions:
-            if not tools.results_presenter.ResultsPresenter.is_already_solved(question, method_name):
-                model.test(question, method_name)
+    model.prepare_for_testing()
+    logging.info('testing model: %s' % model.model_name())
+    for question in questions:
+        if not tools.results_presenter.ResultsPresenter.is_already_solved(question, method_name):
+            model.test(question, method_name)
 
 def start(args, questions, method_name):
     learning_model_count = (args.learning_model_questions_words_count, args.learning_model_articles_title_words_count, args.learning_model_articles_content_words_count)
