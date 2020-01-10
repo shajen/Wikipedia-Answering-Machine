@@ -40,7 +40,7 @@ Run below commands in terminal:
 ```
 or
 ```
-./run_all.sh
+./99-run_all.sh
 ```
 Be patient, it may takes even a few hours or days, especially `06-resolve.sh` script.
 
