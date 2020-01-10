@@ -105,7 +105,7 @@ class ReportManager():
             return
         print('')
         articles = defaultdict(set)
-        if args.all:
+        if args['all']:
             methods = Method.objects.filter(name__contains=args['methodPatterns']).order_by('name')
         else:
             methods = Method.objects.filter(name__contains=args['methodPatterns'], is_enabled=True).order_by('name')
