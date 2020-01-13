@@ -34,7 +34,7 @@ class DataLoader():
     def articles_content_words_count(self):
         return self.__learning_model_articles_content_words_count
 
-    def __load_word2vec_model(self):
+    def load_word2vec_model(self):
         try:
             self.__word2vec_model
         except:
@@ -146,7 +146,7 @@ class DataLoader():
         else:
             self.__words_to_vec.fill(np.nan)
 
-        self.__load_word2vec_model()
+        self.load_word2vec_model()
         logging.info('loading words vectors')
         for (word_id, value) in Word.objects.filter(is_stop_word=False).values_list('id', 'value'):
             logging.debug(word_id)
@@ -174,7 +174,7 @@ class DataLoader():
                 logging.debug("vector already exists")
 
     def get_words_similar_words(self, words, topn):
-        self.__load_word2vec_model()
+        self.load_word2vec_model()
         similar_words = []
         for value in Word.objects.filter(id__in=words).values_list("value", flat=True):
             if value in self.__word2vec_model:

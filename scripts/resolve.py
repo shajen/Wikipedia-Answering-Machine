@@ -121,6 +121,7 @@ def start(args, questions, method_name):
     if any([args.tfidf_models, args.vector_model_cosine, args.vector_model_cityblock, args.vector_model_euclidean]):
         start_callback_threads(args, questions, '%s, type: tfi, title: %d, ngram: %d' % (method_name, args.title, args.ngram), resolve_questions_tf_idf, (data_loader,))
     if args.word2vec_model:
+        data_loader.load_word2vec_model()
         start_callback_threads(args, questions, '%s, type: w2v, topn: %03d, title: %d' % (method_name, args.topn, args.title), resolve_questions_word2vec, (data_loader,))
     if args.convolution_neural_network:
         model = calculators.neural_weight_calculator.NeuralWeightCalculator(data_loader, args.debug_top_items, args.cache_directory, args.neural_model_good_bad_ratio, args.neural_model_method)

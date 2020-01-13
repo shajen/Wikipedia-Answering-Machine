@@ -32,14 +32,14 @@ class Word2VecWeightCalculator():
             if topn > 0:
                 # logging.info('words set count: %d' % len(question_words))
                 # question_words = self.__data_loader.get_words_base_forms(question_words)
-                logging.info('words set count: %d' % len(question_words))
-                question_words = self.__data_loader.get_words_changed_forms(question_words) | question_words
+                # logging.info('words set count: %d' % len(question_words))
+                # question_words = self.__data_loader.get_words_changed_forms(question_words) | question_words
                 logging.info('words set count: %d' % len(question_words))
                 question_words = self.__data_loader.get_words_similar_words(question_words, topn)
-                logging.info('words set count: %d' % len(question_words))
-                question_words = self.__data_loader.get_words_changed_forms(question_words) | question_words
-                logging.info('words set count: %d' % len(question_words))
-                question_words = self.__data_loader.get_words_base_forms(question_words)
+                # logging.info('words set count: %d' % len(question_words))
+                # question_words = self.__data_loader.get_words_changed_forms(question_words) | question_words
+                # logging.info('words set count: %d' % len(question_words))
+                # question_words = self.__data_loader.get_words_base_forms(question_words)
             logging.info('words set count: %d' % len(question_words))
             # ResultsPresenter.log_words(question_words)
             question_words = np.array(list(question_words))
