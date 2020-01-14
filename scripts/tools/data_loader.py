@@ -2,6 +2,7 @@ from collections import defaultdict
 from data.models import *
 import gensim.models
 import logging
+import cupy as cp
 import numpy as np
 import SharedArray
 
@@ -72,7 +73,7 @@ class DataLoader():
         for question in Question.objects.all():
             logging.debug('question: %d' % question.id)
             self.__questions_id[i] = question.id
-            words = question.get_words(stop_words, self.__classic_model_questions_words_count)
+            words = cp.asnumpy(question.get_words(stop_words, self.__classic_model_questions_words_count))
             # self.__questions_words[question.id] = words[:self.__learning_model_questions_words_count]
             self.__questions_base_words[question.id] = self.__words_to_base_forms[words]
             i += 1
@@ -104,8 +105,8 @@ class DataLoader():
         for article in Article.objects.filter(content_words_count__gte=10):
             logging.debug('article: %d' % article.id)
             self.__articles_id[i] = article.id
-            title_words = article.get_words(True, stop_words, self.__classic_model_articles_title_words_count)
-            content_words = article.get_words(False, stop_words, self.__classic_model_articles_content_words_count)
+            title_words = cp.asnumpy(article.get_words(True, stop_words, self.__classic_model_articles_title_words_count))
+            content_words = cp.asnumpy(article.get_words(False, stop_words, self.__classic_model_articles_content_words_count))
             # self.__articles_title_words[article.id] = title_words[:self.__learning_model_articles_title_words_count]
             # self.__articles_content_words[article.id] = content_words[:self.__learning_model_articles_content_words_count]
             self.__articles_title_base_words[article.id] = self.__words_to_base_forms[title_words]
@@ -189,44 +190,48 @@ class DataLoader():
         return set(WordForm.objects.filter(base_word_id__in=words).values_list('changed_word_id', flat=True))
 
     def get_words_data(self, words):
-        return self.__words_to_vec[words]
+        words = cp.asnumpy(words)
+        return cp.asarray(self.__words_to_vec)[words]
 
     def get_questions_id(self):
-        return self.__questions_id
+        return cp.asarray(self.__questions_id)
 
     def get_question_words_id(self, trimmed, question_id):
-        words = self.__questions_base_words[question_id][:self.__learning_model_questions_words_count]
+        question_id = cp.asnumpy(question_id)
+        words = cp.asarray(self.__questions_base_words)[question_id][:self.__learning_model_questions_words_count]
         if trimmed:
             words = self.__trimmed_words(words)
         return words
 
     def get_articles_id(self):
-        return self.__articles_id
+        return cp.asarray(self.__articles_id)
 
     def get_article_words_id(self, trimmed, article_id, is_title):
+        article_id = cp.asnumpy(article_id)
         if is_title:
-            words = self.__articles_title_base_words[article_id][:self.__learning_model_articles_title_words_count]
+            words = cp.asarray(self.__articles_title_base_words)[article_id][:self.__learning_model_articles_title_words_count]
         else:
-            words = self.__articles_content_base_words[article_id][:self.__learning_model_articles_content_words_count]
+            words = cp.asarray(self.__articles_content_base_words)[article_id][:self.__learning_model_articles_content_words_count]
         if trimmed:
             words = self.__trimmed_words(words)
         return words
 
     def __trimmed_words(self, words):
-        index = np.nonzero(words == 0)[0]
+        index = cp.nonzero(words == 0)[0]
         if index.size:
             return words[:index[0]]
         else:
             if words.size:
                 return words
             else:
-                return np.array([])
+                return cp.array([])
 
     def get_question_all_words(self, question_id):
-        return self.__trimmed_words(self.__questions_base_words[question_id])
+        question_id = cp.asnumpy(question_id)
+        return self.__trimmed_words(cp.asarray(self.__questions_base_words)[question_id])
 
     def get_articles_all_words(self, is_title):
         if is_title:
-            return self.__articles_title_base_words
+            return cp.asarray(self.__articles_title_base_words)
         else:
-            return self.__articles_content_base_words
+            return cp.asarray(self.__articles_content_base_words)

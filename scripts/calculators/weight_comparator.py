@@ -3,7 +3,7 @@ from data.models import *
 from scipy.spatial.distance import cdist
 import logging
 import math
-import numpy as np
+import cupy as cp
 import operator
 import re
 # import tensorflow as tf
@@ -24,9 +24,9 @@ class WeightComparator:
     def get_best_score(self, question_vector, vectors, words_set_weights):
         distances = cdist([question_vector], vectors, self.__distance_function)
         if self.__ascending_order:
-            i = np.argmax(distances[0])
+            i = cp.argmax(distances[0])
         else:
-            i = np.argmin(distances[0])
+            i = cp.argmin(distances[0])
         return (distances[0][i], i)
 
 class CosineWeightComparator(WeightComparator):
@@ -54,10 +54,10 @@ class TfIdfWeightComparator(WeightComparator):
         return True
 
     def get_best_score(self, question_vector, vectors, words_set_weights):
-        # distances = np.power(np.sum(vectors, axis=1), np.count_nonzero(vectors, axis=1))
-        # distances = tf.math.pow(tf.math.reduce_sum(tf.constant(vectors, dtype=tf.float32), axis=1), tf.dtypes.cast(tf.math.count_nonzero(vectors, axis=1), tf.float32)).numpy()
+        # distances = cp.power(cp.sum(vectors, axis=1), cp.count_nonzero(vectors, axis=1))
+        # distances = tf.math.pow(tf.math.reduce_sum(tf.constant(vectors, dtype=tf.float32), axis=1), tf.dtypes.cast(tf.math.count_nonzero(vectors, axis=1), tf.float32)).cupy()
         distances = []
         for weights in words_set_weights:
             distances.append(sum(weights.values()) * math.pow(len(weights), self.__power_factor))
-        i = np.argmax(distances)
+        i = cp.argmax(distances)
         return (distances[i], i)

@@ -7,7 +7,7 @@ django-admin-tools
 django
 gensim
 pyemd
-numpy
+cupy
 mwparserfromhell
 termcolor
 pydot

@@ -7,7 +7,7 @@ import argparse
 import json
 import logging
 import multiprocessing
-import numpy as np
+import cupy as cp
 import os
 import re
 import shlex
@@ -22,7 +22,7 @@ import tools.logger
 def insert_objects(object_type, all_objects, batch_size):
     logging.info('inserting %d %s' % (len(all_objects), object_type.__name__))
     i = 0
-    for objects in np.array_split(all_objects, max(1, len(all_objects) / batch_size)):
+    for objects in cp.array_split(all_objects, max(1, len(all_objects) / batch_size)):
         i += batch_size
         try:
             logging.info('iteration #%d' % i)

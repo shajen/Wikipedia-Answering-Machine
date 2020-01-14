@@ -1,7 +1,7 @@
 from django.db import models
 from django.core.validators import int_list_validator
 from more_itertools import unique_everseen
-import numpy as np
+import cupy as cp
 
 class ListField(models.TextField):
     def __init__(self, *args, **kwargs):
@@ -82,8 +82,8 @@ class Article(models.Model):
         words = list(filter(lambda w: w != '', words))
         words = list(map(lambda w: int(w), words))
         words = list(filter(lambda w: w not in stop_words, words))
-        words = np.array(words[:top_words], dtype=np.uint32)
-        words = np.concatenate((words, np.zeros(shape=(top_words - words.shape[0]), dtype=np.uint32)), axis=0)
+        words = cp.array(words[:top_words], dtype=cp.uint32)
+        words = cp.concatenate((words, cp.zeros(shape=(top_words - words.shape[0]), dtype=cp.uint32)), axis=0)
         return words
 
 class Method(models.Model):
@@ -115,8 +115,8 @@ class Question(models.Model):
         words = list(filter(lambda w: w != '', words))
         words = list(map(lambda w: int(w), words))
         words = list(filter(lambda w: w not in stop_words, words))
-        words = np.array(words[:top_words], dtype=np.uint32)
-        words = np.concatenate((words, np.zeros(shape=(top_words - words.shape[0]), dtype=np.uint32)), axis=0)
+        words = cp.array(words[:top_words], dtype=cp.uint32)
+        words = cp.concatenate((words, cp.zeros(shape=(top_words - words.shape[0]), dtype=cp.uint32)), axis=0)
         return words
 
 class Answer(models.Model):

@@ -3,7 +3,7 @@ from functools import reduce
 from termcolor import colored
 from tools.results_presenter import ResultsPresenter
 import logging
-import numpy as np
+import cupy as cp
 import os
 import tensorflow as tf
 import re
@@ -30,19 +30,19 @@ class NeuralWeightCalculator():
     def __prepare_articles(self, articles_id, top_words, is_title, show_progress):
         logging.debug('preparing %d articles, top words: %d, title: %d' % (articles_id.shape[0], top_words, is_title))
         if is_title:
-            data = np.zeros(shape=(articles_id.shape[0], self.__articles_title_words, self._word2vec_size), dtype=np.float32)
+            data = cp.zeros(shape=(articles_id.shape[0], self.__articles_title_words, self._word2vec_size), dtype=cp.float32)
         else:
-            data = np.zeros(shape=(articles_id.shape[0], self.__articles_content_words, self._word2vec_size), dtype=np.float32)
+            data = cp.zeros(shape=(articles_id.shape[0], self.__articles_content_words, self._word2vec_size), dtype=cp.float32)
         total = articles_id.shape[0]
         current = 0
         step = max(1, round(total / (10 if is_title else 100)))
         for article_id in articles_id:
             words = self.__data_loader.get_article_words_id(False, article_id, is_title)
-            data[current] = np.nan_to_num(self.__data_loader.get_words_data(words))
+            data[current] = cp.nan_to_num(self.__data_loader.get_words_data(words))
             current += 1
             if current % step == 0 and show_progress:
                 logging.debug("progress: %d/%d (%.2f %%)" % (current, total, current / total * 100))
-        data = np.array(data)
+        data = cp.array(data)
         logging.debug("data size: %s" % str(data.shape))
         return data
 
@@ -54,24 +54,24 @@ class NeuralWeightCalculator():
         step = max(1, round(total / 10))
         for question_id in questions_id:
             words = self.__data_loader.get_question_words_id(False, question_id)
-            data.append(np.nan_to_num(self.__data_loader.get_words_data(words)))
+            data.append(cp.nan_to_num(self.__data_loader.get_words_data(words)))
             current += 1
             if (current % step == 0):
                 logging.debug("progress: %d/%d (%.2f %%)" % (current, total, current / total * 100))
 
-        data = np.array(data)
+        data = cp.array(data)
         logging.debug("data size: %s" % str(data.shape))
         return data
 
     def __save_file(self, name, data):
         filename = '%s/%s.npy' % (self.__workdir, name)
         logging.debug("saving array %s to file: %s" % (str(data.shape), filename))
-        np.save(filename, data)
+        cp.save(filename, data)
 
     def __load_file(self, name):
         filename = '%s/%s.npy' % (self.__workdir, name)
         logging.debug("loading array from file: %s" % filename)
-        data = np.load(filename)
+        data = cp.load(filename)
         logging.debug("data size: %s" % str(data.shape))
         return data
 
@@ -103,18 +103,18 @@ class NeuralWeightCalculator():
         bad_articles_id = self.__get_bad_articles_id(list(map(lambda q: q.id, questions)), good_articles_id)
         logging.debug('bad articles: %d' % len(bad_articles_id))
 
-        articles_id = np.concatenate((np.array(good_articles_id), np.array(bad_articles_id)))
+        articles_id = cp.concatenate((cp.array(good_articles_id), cp.array(bad_articles_id)))
         logging.debug('total articles: %d' % len(articles_id))
 
-        questions_id = np.repeat(np.array([questions_id]), self.__good_bad_ratio + 1, axis=0).reshape(-1)
+        questions_id = cp.repeat(cp.array([questions_id]), self.__good_bad_ratio + 1, axis=0).reshape(-1)
         logging.debug('total questions: %d' % len(questions_id))
 
         articles_title = self.__prepare_articles(articles_id, self.__articles_title_words, True, True)
         articles_content = self.__prepare_articles(articles_id, self.__articles_content_words, False, True)
         questions = self.__prepare_questions(questions_id, self.__questions_words)
-        targets = np.array([1.0] * len(good_articles_id) + [0.0] * len(bad_articles_id))
+        targets = cp.array([1.0] * len(good_articles_id) + [0.0] * len(bad_articles_id))
 
-        order = np.random.permutation(articles_id.shape[0])
+        order = cp.random.permutation(articles_id.shape[0])
         questions_id = questions_id[order]
         questions = questions[order]
         articles_id = articles_id[order]
@@ -178,8 +178,8 @@ class NeuralWeightCalculator():
             batch_size=64,
             verbose=0)
         predictet_target = predictet_target.reshape(-1)
-        predictet_target = np.where(predictet_target > 0.5, 1.0, 0.0)
-        corrected_count = np.count_nonzero(predictet_target == target)
+        predictet_target = cp.where(predictet_target > 0.5, 1.0, 0.0)
+        corrected_count = cp.count_nonzero(predictet_target == target)
         total_count = target.shape[0]
         r1 = self.__colored('%d/%d' % (corrected_count, total_count), 'yellow')
         r2 = self.__colored('%.2f %%' % (corrected_count / total_count * 100), 'yellow')
@@ -316,7 +316,7 @@ class NeuralWeightCalculator():
         self.__test_model('test', model)
 
     def __full_test_article(self, method, bypass_model, question_id, question_data, articles_id, articles_data):
-        questions_data = np.repeat([question_data], articles_data.shape[0], 0)
+        questions_data = cp.repeat([question_data], articles_data.shape[0], 0)
         logging.info(questions_data.shape)
         logging.info(articles_data.shape)
         articles_weight = bypass_model.predict(
@@ -327,7 +327,7 @@ class NeuralWeightCalculator():
 
     def __full_test_questions(self, method_name, question_id, articles_id, articles_output, questions_model, bypass_model):
         test_method, created = Method.objects.get_or_create(name=method_name, is_smaller_first=False)
-        questions_data = self.__prepare_questions(np.array([question_id]), self.__questions_words)
+        questions_data = self.__prepare_questions(cp.array([question_id]), self.__questions_words)
         questions_output = questions_model.predict(questions_data, batch_size=64, verbose=0)
         self.__full_test_article(test_method, bypass_model, question_id, questions_output[0], articles_id, articles_output)
 
@@ -372,15 +372,15 @@ class NeuralWeightCalculator():
         self.__test_model('test', model)
 
         self.__articles_id = self.__data_loader.get_articles_id()
-        self.__articles_output = np.zeros(shape=(0, articles_model.output_shape[1]))
-        articles_id_chunks = np.array_split(self.__articles_id, NeuralWeightCalculator.__ARTICLES_CHUNKS)
+        self.__articles_output = cp.zeros(shape=(0, articles_model.output_shape[1]))
+        articles_id_chunks = cp.array_split(self.__articles_id, NeuralWeightCalculator.__ARTICLES_CHUNKS)
         current = 0
         total = NeuralWeightCalculator.__ARTICLES_CHUNKS
         for i in range(0, NeuralWeightCalculator.__ARTICLES_CHUNKS):
             articles_title = self.__prepare_articles(articles_id_chunks[i], self.__articles_title_words, True, False)
             articles_content = self.__prepare_articles(articles_id_chunks[i], self.__articles_content_words, False, False)
             chunk_output = articles_model.predict({ 'articles_title': articles_title, 'articles_content': articles_content }, batch_size=256, verbose=0)
-            self.__articles_output = np.concatenate((self.__articles_output, chunk_output), axis=0)
+            self.__articles_output = cp.concatenate((self.__articles_output, chunk_output), axis=0)
             current += 1
             logging.debug("progress: %d/%d (%.2f %%)" % (current, total, current / total * 100))
 

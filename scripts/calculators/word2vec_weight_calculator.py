@@ -1,7 +1,7 @@
 from data.models import *
 import gensim.models
 import logging
-import numpy as np
+import cupy as cp
 import scipy.spatial
 from tools.results_presenter import ResultsPresenter
 
@@ -11,10 +11,10 @@ class Word2VecWeightCalculator():
         self.__data_loader = data_loader
 
     def __mean(self, data):
-        if np.isnan(data).all():
-            return np.zeros(shape=(data.shape[1]))
+        if cp.isnan(data).all():
+            return cp.zeros(shape=(data.shape[1]))
         else:
-            return np.nanmean(data, axis=0)
+            return cp.nanmean(data, axis=0)
 
     def __prepare_question(self, question):
         words = self.__data_loader.get_question_words_id(True, question.id)
@@ -42,7 +42,7 @@ class Word2VecWeightCalculator():
                 # question_words = self.__data_loader.get_words_base_forms(question_words)
             logging.info('words set count: %d' % len(question_words))
             # ResultsPresenter.log_words(question_words)
-            question_words = np.array(list(question_words))
+            question_words = cp.array(list(question_words))
         articles_id = []
         articles_data = []
         if logging.getLogger().level == logging.DEBUG:
@@ -50,7 +50,7 @@ class Word2VecWeightCalculator():
         for article_id in self.__data_loader.get_articles_id():
             words = self.__data_loader.get_article_words_id(True, article_id, is_title)
             if topn < 999:
-                words = np.intersect1d(words, question_words)
+                words = cp.intersect1d(words, question_words)
             if words.size:
                 data = self.__data_loader.get_words_data(words)
                 if logging.getLogger().level == logging.DEBUG:
@@ -58,18 +58,18 @@ class Word2VecWeightCalculator():
                         ResultsPresenter.log_article(article_id)
                         ResultsPresenter.log_words(words)
                         # logging.debug(data)
-                if not np.isnan(data).all():
+                if not cp.isnan(data).all():
                     articles_id.append(article_id)
-                    articles_data.append(np.nanmean(data, axis=0))
-        articles_data = np.array(articles_data)
+                    articles_data.append(cp.nanmean(data, axis=0))
+        articles_data = cp.array(articles_data)
         logging.info('articles size: %s' % str(articles_data.shape))
         return (articles_id, articles_data)
 
     def __calculate_distances(self, question_data, articles_data):
         if articles_data.size:
-            return scipy.spatial.distance.cdist(np.array([question_data]), articles_data, 'cosine')[0]
+            return scipy.spatial.distance.cdist(cp.array([question_data]), articles_data, 'cosine')[0]
         else:
-            return np.zeros(shape=(0,1))
+            return cp.zeros(shape=(0,1))
 
     def calculate(self, question, method_name, is_title, topn):
         logging.info('calculating')

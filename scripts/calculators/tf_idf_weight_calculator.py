@@ -3,7 +3,7 @@ from data.models import *
 import logging
 import math
 import re
-import numpy as np
+import cupy as cp
 import tools.results_presenter
 
 class TfIdfWeightCalculator():
@@ -22,7 +22,7 @@ class TfIdfWeightCalculator():
     def get_ngrams(words, ngram_size):
         ngrams = []
         for i in range(0, len(words) - ngram_size + 1):
-            ngrams.append(tuple(words[i:i+ngram_size]))
+            ngrams.append(tuple(cp.asnumpy(words[i:i+ngram_size])))
         return ngrams
 
     def __count_articles(question_words, is_title, data_loader, ngram_size):
@@ -30,31 +30,33 @@ class TfIdfWeightCalculator():
         articles_words_count_ngram = defaultdict(lambda: defaultdict(lambda: 0))
         articles_positions_ngram = defaultdict(list)
 
-        chunk_size = 500000
+        chunk_size = 100000
         chunk = 0
         total_index = data_loader.get_articles_id()[-1]
         while chunk * chunk_size < total_index:
             start_index = chunk * chunk_size
             stop_index = (chunk + 1) * chunk_size
             articles_words = data_loader.get_articles_all_words(is_title)[start_index:stop_index]
-            articles_mask = np.isin(articles_words, question_words)
+            articles_mask = cp.isin(articles_words, question_words)
 
             for article_id in data_loader.get_articles_id():
                 if start_index <= article_id and article_id < stop_index:
                     words = articles_words[article_id - start_index]
                     mask = articles_mask[article_id - start_index]
-                    if np.any(mask):
+                    if cp.any(mask):
+                        article_id = int(article_id)
+                        logging.info(article_id)
                         if ngram_size == 1:
-                            indexes = np.arange(words.shape[0])[mask]
+                            indexes = cp.arange(words.shape[0])[mask]
                             for index in indexes:
-                                ngram = (words[index],)
+                                ngram = (int(words[index]),)
                                 articles_words_count_ngram[article_id][ngram] += 1
                                 articles_positions_ngram[article_id].append((index, ngram))
                         elif ngram_size == 2:
-                            indexes = np.arange(words.shape[0])[mask]
+                            indexes = cp.arange(words.shape[0])[mask]
                             for i in range(indexes.shape[0]-1):
                                 if indexes[i] + 1 == indexes[i+1]:
-                                    ngram = (words[indexes[i]], words[indexes[i+1]])
+                                    ngram = (int(words[indexes[i]]), int(words[indexes[i+1]]))
                                     articles_words_count_ngram[article_id][ngram] += 1
                                     articles_positions_ngram[article_id].append((indexes[i], ngram))
             chunk += 1
@@ -196,6 +198,6 @@ class TfIdfWeightCalculator():
         for comparator in comparators:
             (articles_words_weight, articles_weight) = (comparators_articles_words_weight[comparator.method()], comparators_articles_weight[comparator.method()])
             articles_id = list(articles_weight.keys())
-            distances = np.array(list(articles_weight.values()))
+            distances = cp.array(list(articles_weight.values()))
             (method, created) = Method.objects.get_or_create(name=comparator.method(), is_smaller_first=not comparator.ascending_order())
             tools.results_presenter.ResultsPresenter.present(question, articles_id, distances, method, self.__debug_top_items, not comparator.ascending_order())

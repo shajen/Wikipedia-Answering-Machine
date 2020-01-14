@@ -6,7 +6,7 @@ import deap.base
 import deap.creator
 import deap.tools
 import logging
-import numpy as np
+import cupy as cp
 import pickle
 import random
 import tools.results_presenter
@@ -41,7 +41,7 @@ class EvolutionaryAlgorithm():
         return 'w2v' in method_name or ('tfi' in method_name and ('cosine' in method_name or 'cityblock' in method_name or 'euclidean' in method_name))
 
     def __normalise(self, data, method_name):
-        max = np.nanmax(data)
+        max = cp.nanmax(data)
         if max != 0.0:
             if self.__is_smaller_first(method_name):
                 data /= max
@@ -52,13 +52,13 @@ class EvolutionaryAlgorithm():
 
     def __prepare_question(self, question_id, methods_id, methods_id_position, methods_id_name):
         articles_id = list(Rate.objects.filter(question_id=question_id, method_id__in=methods_id).distinct().values_list('article_id', flat=True))
-        articles_positions = np.argsort(np.argsort(articles_id))
+        articles_positions = cp.argsort(cp.argsort(articles_id))
         articles_id_position = {}
         for i in range(0, len(articles_id)):
             articles_id_position[articles_id[i]] = articles_positions[i]
 
-        articles_data = np.zeros(shape=(len(methods_id), len(articles_id)), dtype=np.float32)
-        articles_data.fill(np.nan)
+        articles_data = cp.zeros(shape=(len(methods_id), len(articles_id)), dtype=cp.float32)
+        articles_data.fill(cp.nan)
         answers = Answer.objects.filter(question_id=question_id)
         for method_id in methods_id:
             corrected_articles_position = {}
@@ -76,8 +76,8 @@ class EvolutionaryAlgorithm():
                 method_index = methods_id_position[method_id]
                 articles_data[method_index][article_index] = weight
             self.__normalise(articles_data[method_index], methods_id_name[method_id])
-        articles_data = np.nan_to_num(articles_data)
-        # self.__train_data[question_id] = (articles_id, np.transpose(articles_data))
+        articles_data = cp.nan_to_num(articles_data)
+        # self.__train_data[question_id] = (articles_id, cp.transpose(articles_data))
         # logging.debug("question: %d" % question_id)
         # logging.debug("articles: %d" % len(articles_id))
         # logging.debug("articles shape: %s" % str(articles_data.shape))
@@ -88,7 +88,7 @@ class EvolutionaryAlgorithm():
         #         method_name = methods_id_name[method_id]
         #         logging.debug("  min: %.2f, max: %.2f, %s" % (articles_data[method_index].min(), articles_data[method_index].max(), method_name))
         corrected_articles_id = list(Answer.objects.filter(question_id=question_id).values_list('article_id', flat=True))
-        return (articles_id, np.transpose(articles_data), corrected_articles_id)
+        return (articles_id, cp.transpose(articles_data), corrected_articles_id)
 
     def __generate_dataset(self, questions, dataset, methods_id, methods_id_position, methods_id_name):
         logging.info("methods: %d" % len(methods_id))
@@ -123,7 +123,7 @@ class EvolutionaryAlgorithm():
 
     def __get_articles_scores(self, individual, question_id, data):
         (articles_id, articles_data, corrected_articles_id) = data[question_id]
-        scores = np.sum(articles_data * individual, axis=1)
+        scores = cp.sum(articles_data * individual, axis=1)
         return (articles_id, scores, corrected_articles_id)
 
     def __get_articles_positions(self, individual, question_id, data, debug):
@@ -150,7 +150,7 @@ class EvolutionaryAlgorithm():
         return positions
 
     def __score(self, individual, data, debug):
-        individual = np.array(individual)
+        individual = cp.array(individual)
         total_ones = 0
         total_positions = 0
         for question_id in data:
