@@ -72,18 +72,21 @@ def start_callback_threads(args, questions, method_name, callback, callback_argu
     for question in questions:
         questions_queue.put(question)
 
-    try:
-        threads = []
-        for i in range(args.threads):
-            thread = multiprocessing.Process(target=callback, args=(args, questions_queue, method_name) + callback_arguments)
-            thread.start()
-            threads.append(thread)
-        for thread in threads:
-            thread.join()
-    except KeyboardInterrupt:
-        logging.info('stopping threads')
-        for thread in threads:
-            thread.terminate()
+    if args.threads == 1:
+        callback(*((args, questions_queue, method_name) + callback_arguments))
+    else:
+        try:
+            threads = []
+            for i in range(args.threads):
+                thread = multiprocessing.Process(target=callback, args=(args, questions_queue, method_name) + callback_arguments)
+                thread.start()
+                threads.append(thread)
+            for thread in threads:
+                thread.join()
+        except KeyboardInterrupt:
+            logging.info('stopping threads')
+            for thread in threads:
+                thread.terminate()
 
 def split_questions(questions, args):
     values = list(map(lambda n: int(n), args.dataset_proportion.split(':')))
