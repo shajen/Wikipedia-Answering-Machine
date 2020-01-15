@@ -32,6 +32,8 @@ class ReportManager():
     def process(self, args):
         logging.info("process with top answers (%s)" % ', '.join(str(x) for x in args['tops']))
         questions_id = Question.objects.values_list('id', flat=True)
+        if args['questionCount'] > 0:
+            questions_id = list(questions_id)[:args['questionCount']]
         if args['dataset_proportion']:
             (train_dataset, validate_dataset, test_dataset) = ReportManager.split_questions(questions_id, args['dataset_proportion'])
             self.printErrorRate(args, "train dataset: %d" % len(train_dataset), train_dataset)
@@ -39,7 +41,6 @@ class ReportManager():
             self.printErrorRate(args, "test dataset: %d" % len(test_dataset), test_dataset)
         else:
             self.printErrorRate(args, 'all', questions_id)
-        self.printQuestions(args)
         logging.info("finish")
 
     def calculateMethodsQuestionsPositions(self, args, questions_id, methods_id):
@@ -99,42 +100,3 @@ class ReportManager():
                     sys.stdout.write("  %.4f" % weight)
             sys.stdout.write("  %.4f" % methods_mrp[method.id])
             sys.stdout.write('\n')
-
-    def printQuestions(self, args):
-        if args['questionCount'] <= 0:
-            return
-        print('')
-        articles = defaultdict(set)
-        if args['all']:
-            methods = Method.objects.filter(name__contains=args['methodPatterns']).order_by('name')
-        else:
-            methods = Method.objects.filter(name__contains=args['methodPatterns'], is_enabled=True).order_by('name')
-        for method in methods:
-            print("method %s" % self.methodColor(method.name))
-            data = defaultdict(list)
-            questions_positions = defaultdict(set)
-            for solution in method.solution_set.all():
-                questions_positions[solution.answer.question.id].add(solution.position)
-            for question_id in questions_positions:
-                positions = list(questions_positions[question_id])
-                data[max(positions)].append((question_id, positions))
-            printedCount = 0
-            for pos, value in sorted(data.items(), reverse=not args['questionBetter']):
-                if (args['questionBetter'] and pos < args['questionAnswerPosition']) or (not args['questionBetter'] and pos > args['questionAnswerPosition']):
-                    continue
-                for (question_id, positions) in value:
-                    if printedCount >= args['questionCount']:
-                        break
-                    question = Question.objects.get(id=question_id)
-                    print("#QT %s" % question.name)
-                    for answer in question.answer_set.all():
-                        print("#AT %s" % answer.article.title)
-                    print("#QI %s" % question_id)
-                    for answer in question.answer_set.all():
-                        print("#AI %s" % answer.article.id)
-                    print("#AP %s" % ', '.join(str(p) for p in positions))
-                    print(self.splitColor("-" * 80))
-                    printedCount += 1
-                if printedCount >= args['questionCount']:
-                    break
-            print("")
