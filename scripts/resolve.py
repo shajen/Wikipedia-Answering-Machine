@@ -119,19 +119,20 @@ def start_learning_model(args, questions, model, method_name):
 def start(args, questions, method_name):
     learning_model_count = (args.learning_model_questions_words_count, args.learning_model_articles_title_words_count, args.learning_model_articles_content_words_count)
     classic_model_count = (args.classic_model_questions_words_count, args.classic_model_articles_title_words_count, args.classic_model_articles_content_words_count)
+    learning_count = 'q: %02d, at: %02d, ac: %04d' % learning_model_count
     data_loader = tools.data_loader.DataLoader(learning_model_count, classic_model_count, args.word2vec_file, args.word2vec_size, args.word2vec_random, args.extend_stop_words)
 
     if any([args.tfidf_models, args.vector_model_cosine, args.vector_model_cityblock, args.vector_model_euclidean]):
         start_callback_threads(args, questions, '%s, type: tfi, title: %d, ngram: %d' % (method_name, args.title, args.ngram), resolve_questions_tf_idf, (data_loader,))
     if args.word2vec_model:
         data_loader.load_word2vec_model()
-        start_callback_threads(args, questions, '%s, type: w2v, topn: %03d, title: %d' % (method_name, args.topn, args.title), resolve_questions_word2vec, (data_loader,))
+        start_callback_threads(args, questions, '%s, type: w2v, topn: %03d, title: %d, %s' % (method_name, args.topn, args.title, learning_count), resolve_questions_word2vec, (data_loader,))
     if args.convolution_neural_network:
         model = calculators.neural_weight_calculator.NeuralWeightCalculator(data_loader, args.debug_top_items, args.cache_directory, args.neural_model_good_bad_ratio, args.neural_model_method)
-        start_learning_model(args, questions, model, '%s, type: cnn' % (method_name))
+        start_learning_model(args, questions, model, '%s, type: cnn, %s' % (method_name, learning_count))
     if args.deep_averaging_network:
         model = calculators.deep_averaging_neural_weight_calculator.DeepAveragingNeuralWeightCalculator(data_loader, args.debug_top_items, args.cache_directory, args.neural_model_good_bad_ratio, args.neural_model_method)
-        start_learning_model(args, questions, model, '%s, type: dan' % (method_name))
+        start_learning_model(args, questions, model, '%s, type: dan, %s' % (method_name, learning_count))
     if args.evolutionary_algorithm:
         model = calculators.evolutionary_algorithm.EvolutionaryAlgorithm(args.debug_top_items, args.cache_directory, args.evolutionary_algorithm_methods_patterns, args.evolutionary_algorithm_population, args.neural_model_method)
         start_learning_model(args, questions, model, '%s, type: ean, p: %04d' % (method_name, args.evolutionary_algorithm_population))
