@@ -12,7 +12,8 @@ mwparserfromhell
 termcolor
 pydot
 graphviz
-tensorflow
+tensorflow-gpu
 more_itertools
 SharedArray
 deap
+matplotlib

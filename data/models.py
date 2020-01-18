@@ -3,6 +3,7 @@ from django.core.validators import int_list_validator
 from more_itertools import unique_everseen
 import numpy as np
 import statistics
+import re
 
 class ListField(models.TextField):
     def __init__(self, *args, **kwargs):
@@ -117,6 +118,44 @@ class Method(models.Model):
         positions = list(Solution.objects.filter(answer_id__in=answers, method_id=self.id).values_list('position', flat=True))
         p_scores = [p_score(n, positions) for n in top_n]
         return (len(positions), p_scores + [mrr(positions)])
+
+    def preety_name(self):
+        vector_match = re.search(r'type: tfi, title: (\d+), ngram: (\d+), mwiw: 0.00, n: (\d+), m: (\w+)', self.name)
+        tfidf_match = re.search(r'type: tfi, title: (\d+), ngram: (\d+), mwiw: 0.00, n: (\d+), pf:', self.name)
+        w2v_match = re.search(r'type: w2v, topn: (\d+), title: (\d), q: \d+, at: \d+, ac: \d+', self.name)
+        if vector_match:
+            title = int(vector_match.group(1))
+            ngram = int(vector_match.group(2))
+            n = int(vector_match.group(3))
+            type = vector_match.group(4)
+            if type == 'cosine':
+                type = 'cosinusowa'
+            return 'kontekstowa wektorowa miara %s\ndla n = %d, dane: %s %s artykułów' % (type, n, 'słowa' if ngram == 1 else 'bigramy', 'tytułów' if title == 1 else 'treści')
+        elif tfidf_match:
+            title = int(tfidf_match.group(1))
+            ngram = int(tfidf_match.group(2))
+            n = int(tfidf_match.group(3))
+            if n == 0:
+                return 'miara TF-IDF\ndane: %s %s artykułów' % ('słowa' if ngram == 1 else 'bigramy', 'tytułów' if title == 1 else 'treści')
+            else:
+                return 'kontekstowa miara TF-IDF dla n = %d\ndane: %s %s artykułów' % (n, 'słowa' if ngram == 1 else 'bigramy', 'tytułów' if title == 1 else 'treści')
+        elif w2v_match:
+            topn = int(w2v_match.group(1))
+            title = int(w2v_match.group(2))
+            if topn == 0:
+                type = 'tylko słowa zawarte w pytaniu'
+            elif topn == 10:
+                type = '10 najbliższych słów'
+            else:
+                type = 'wszystkie słowa'
+            return 'word2vec %s\ndane: %s artykułów' % (type, 'tytuły' if title == 1 else 'treści')
+        elif 'type: cnn' in self.name:
+            return 'CNN'
+        elif 'type: dan' in self.name:
+            return 'DAN'
+        elif 'type: ean' in self.name:
+            return 'algorytm ewolucyjny'
+        return self.name
 
 class Question(models.Model):
     name = models.TextField(max_length=1024)
