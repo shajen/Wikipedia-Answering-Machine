@@ -2,6 +2,7 @@ from django.db import models
 from django.core.validators import int_list_validator
 from more_itertools import unique_everseen
 import numpy as np
+import statistics
 
 class ListField(models.TextField):
     def __init__(self, *args, **kwargs):
@@ -94,6 +95,28 @@ class Method(models.Model):
 
     def __str__(self):
         return self.name
+
+    def scores(self, questions_id=[], top_n=[1,10,100]):
+        def p_score(n, positions):
+            try:
+                return len([p for p in positions if p<=n]) / len(positions)
+            except ZeroDivisionError:
+                return 0.0
+
+        def mrr(positions):
+            try:
+                return 1 / statistics.harmonic_mean(positions)
+            except statistics.StatisticsError:
+                return 0.0
+
+        if questions_id:
+            answers = Answer.objects.filter(question_id__in=questions_id).values_list('id', flat=True)
+        else:
+            answers = Answer.objects.values_list('id', flat=True)
+
+        positions = list(Solution.objects.filter(answer_id__in=answers, method_id=self.id).values_list('position', flat=True))
+        p_scores = [p_score(n, positions) for n in top_n]
+        return (len(positions), p_scores + [mrr(positions)])
 
 class Question(models.Model):
     name = models.TextField(max_length=1024)
