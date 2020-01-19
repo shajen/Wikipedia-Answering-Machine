@@ -11,6 +11,61 @@ import pickle
 import random
 import tools.results_presenter
 import statistics
+import multiprocessing
+from scripts.generate_graphs import plot_data
+
+DATA = None
+DEBUG = False
+
+def get_articles_scores(individual, question_id, data):
+    (articles_id, articles_data, corrected_articles_id) = data[question_id]
+    scores = np.sum(articles_data * individual, axis=1)
+    return (articles_id, scores, corrected_articles_id)
+
+def get_articles_positions(individual, question_id, data, debug):
+    (articles_id, scores, corrected_articles_id) = get_articles_scores(individual, question_id, data)
+    positions = []
+    # if debug:
+    #     logging.debug("question: %d" % question_id)
+    #     logging.debug(scores)
+    #     logging.debug(scores.max())
+    #     logging.debug(scores.min())
+    #     logging.debug("corrected articles:")
+    for article_id in corrected_articles_id:
+        position = bisect.bisect_left(articles_id, article_id)
+        article_score = scores[position]
+        position = 0
+        for score in scores:
+            if score >= article_score:
+                position += 1
+        positions.append(position)
+        # if debug:
+        #     logging.debug("  article: %d, position: %d, weight: %.2f" % (article_id, position, article_score))
+    # if debug:
+    #     logging.debug('-' * 80)
+    return positions
+
+def score_p1(individual):
+    individual = np.array(individual)
+    total_ones = 0
+    total_positions = 0
+    for question_id in DATA:
+        positions = get_articles_positions(individual, question_id, DATA, DEBUG)
+        for i in range(1, 10):
+            if i in positions:
+                total_ones += 1
+            else:
+                break
+        total_positions += len(positions)
+    return (total_ones / total_positions, )
+
+def score_mrr(individual):
+    individual = np.array(individual)
+    total_positions = []
+    for question_id in DATA:
+        positions = get_articles_positions(individual, question_id, DATA, DEBUG)
+        total_positions.extend(positions)
+    return (1 / statistics.harmonic_mean(total_positions), )
 
 class EvolutionaryAlgorithm():
     def __init__(self, debug_top_items, workdir, methods_patterns, population):
@@ -122,56 +177,6 @@ class EvolutionaryAlgorithm():
             self.__save_data(data, 'ea_' + dataset)
             return data
 
-    def __get_articles_scores(self, individual, question_id, data):
-        (articles_id, articles_data, corrected_articles_id) = data[question_id]
-        scores = np.sum(articles_data * individual, axis=1)
-        return (articles_id, scores, corrected_articles_id)
-
-    def __get_articles_positions(self, individual, question_id, data, debug):
-        (articles_id, scores, corrected_articles_id) = self.__get_articles_scores(individual, question_id, data)
-        positions = []
-        # if debug:
-        #     logging.debug("question: %d" % question_id)
-        #     logging.debug(scores)
-        #     logging.debug(scores.max())
-        #     logging.debug(scores.min())
-        #     logging.debug("corrected articles:")
-        for article_id in corrected_articles_id:
-            position = bisect.bisect_left(articles_id, article_id)
-            article_score = scores[position]
-            position = 0
-            for score in scores:
-                if score >= article_score:
-                    position += 1
-            positions.append(position)
-            # if debug:
-            #     logging.debug("  article: %d, position: %d, weight: %.2f" % (article_id, position, article_score))
-        # if debug:
-        #     logging.debug('-' * 80)
-        return positions
-
-    def __score_p1(self, individual, data, debug):
-        individual = np.array(individual)
-        total_ones = 0
-        total_positions = 0
-        for question_id in data:
-            positions = self.__get_articles_positions(individual, question_id, data, debug)
-            for i in range(1, 10):
-                if i in positions:
-                    total_ones += 1
-                else:
-                    break
-            total_positions += len(positions)
-        return total_ones / total_positions
-
-    def __score_mrr(self, individual, data, debug):
-        individual = np.array(individual)
-        total_positions = []
-        for question_id in data:
-            positions = self.__get_articles_positions(individual, question_id, data, debug)
-            total_positions.extend(positions)
-        return 1 / statistics.harmonic_mean(total_positions)
-
     def __save_data(self, data, name):
         filename = '%s/%s.pkl' % (self.__workdir, name)
         logging.debug('saving %s' % filename)
@@ -195,9 +200,9 @@ class EvolutionaryAlgorithm():
         data = dict(population=population, rndstate=random.getstate())
         self.__save_data(data, 'ea_population')
 
-    def __get_best_score(self, population, data):
+    def __get_best_score(population, data):
         individual = deap.tools.selBest(population, k=1)[0]
-        return (self.__score_mrr(individual, data, True), self.__score_p1(individual, data, True))
+        return (score_mrr(individual), score_p1(individual))
 
     def __solve(self, population, data, method_name, debug_top_items):
         method, created = Method.objects.get_or_create(name=method_name, is_smaller_first=False)
@@ -208,14 +213,22 @@ class EvolutionaryAlgorithm():
                 (articles_id, scores, corrected_articles_id) = self.__get_articles_scores(individual, question_id, data)
                 tools.results_presenter.ResultsPresenter.present(question, articles_id, scores, method, debug_top_items, False)
 
-    def __test_dataset(self, population, data, dataset):
-            (mrr, p1) = self.__get_best_score(population, data)
-            logging.info("best individual score_mrr: %.4f, score_p1: %.4f, dataset: %s" % (mrr, p1, dataset))
+    def __test_dataset(population, data, dataset, test_dataset):
+        global DATA
+        DATA = data
+        ((mrr, ), (p1, )) = EvolutionaryAlgorithm.__get_best_score(population, data)
+        logging.info("best individual score_mrr: %.4f, score_p1: %.4f, dataset: %s" % (mrr, p1, dataset))
+        DATA = test_dataset
 
-    def __show_best_individual(self, population):
+    def __show_best_individual(population):
         individual = deap.tools.selBest(population, k=1)[0]
         individual = ', '.join(['%.4f' % w for w in individual])
         logging.info('best individual: [%s]' % individual)
+
+    def __make_graph(population, n):
+        individual = deap.tools.selBest(population, k=1)[0]
+        individual.reverse()
+        plot_data('/home/shajen/mgr/praca/images/model_ea_%03d.png' % n, individual, 5)
 
     def train(self, train_questions, validate_questions, test_questions, epoch):
         if epoch == 0:
@@ -233,14 +246,20 @@ class EvolutionaryAlgorithm():
         deap.creator.create("Fitness", deap.base.Fitness, weights=(1.0,))
         deap.creator.create("Individual", list, fitness=deap.creator.Fitness)
 
+        global score_mrr
+        global DATA
+        DATA = train_data
+
         toolbox = deap.base.Toolbox()
         toolbox.register("weight", random.uniform, 0.0, 1.0)
         toolbox.register("individual", deap.tools.initRepeat, deap.creator.Individual, toolbox.weight, n=len(methods_id))
         toolbox.register("population", deap.tools.initRepeat, list, toolbox.individual)
-        toolbox.register("evaluate", lambda individual: (self.__score_mrr(individual, train_data, False),) )
+        toolbox.register("evaluate", score_mrr)
         toolbox.register("mate", deap.tools.cxTwoPoint)
-        toolbox.register("mutate", deap.tools.mutFlipBit, indpb=0.05)
-        toolbox.register("select", deap.tools.selTournament, tournsize=3)
+        toolbox.register("mutate", deap.tools.mutFlipBit, indpb=0.25)
+        toolbox.register("select", deap.tools.selTournament, tournsize=10)
+        pool = multiprocessing.Pool()
+        toolbox.register("map", pool.map)
 
         try:
             population = self.__load_population()
@@ -250,38 +269,44 @@ class EvolutionaryAlgorithm():
             population = toolbox.population(n=self.__population)
             logging.info('create new population')
 
-        self.__show_best_individual(population)
-        self.__test_dataset(population, train_data, 'train')
-        self.__test_dataset(population, validate_data, 'validate')
-        (best_score_mrr, best_score_p1) = self.__get_best_score(population, validate_data)
+        EvolutionaryAlgorithm.__show_best_individual(population)
+        EvolutionaryAlgorithm.__make_graph(population, 0)
+        EvolutionaryAlgorithm.__test_dataset(population, train_data, 'train', train_data)
+        EvolutionaryAlgorithm.__test_dataset(population, validate_data, 'validate', train_data)
+        EvolutionaryAlgorithm.__test_dataset(population, test_data, 'test', train_data)
+        EvolutionaryAlgorithm.__test_dataset(population, total_data, 'total', train_data)
+        (best_score_mrr, best_score_p1) = EvolutionaryAlgorithm.__get_best_score(population, validate_data)
 
         for e in range(epoch):
             logging.info("generation: %d/%d" % (e+1, epoch))
-            offspring = deap.algorithms.varAnd(population, toolbox, cxpb=0.5, mutpb=0.1)
+            offspring = deap.algorithms.varAnd(population, toolbox, cxpb=0.5, mutpb=0.25)
             fits = toolbox.map(toolbox.evaluate, offspring)
             for fit, ind in zip(fits, offspring):
                 ind.fitness.values = fit
             population = toolbox.select(offspring, k=len(population))
-            (score_mrr, score_p1) = self.__get_best_score(population, validate_data)
-            self.__show_best_individual(population)
-            self.__test_dataset(population, train_data, 'train')
-            self.__test_dataset(population, validate_data, 'validate')
-            if score_mrr > best_score_mrr:
+            (current_score_mrr, score_p1) = EvolutionaryAlgorithm.__get_best_score(population, validate_data)
+            EvolutionaryAlgorithm.__show_best_individual(population)
+            EvolutionaryAlgorithm.__make_graph(population, e+1)
+            EvolutionaryAlgorithm.__test_dataset(population, train_data, 'train', train_data)
+            EvolutionaryAlgorithm.__test_dataset(population, validate_data, 'validate', train_data)
+            EvolutionaryAlgorithm.__test_dataset(population, test_data, 'test', train_data)
+            EvolutionaryAlgorithm.__test_dataset(population, total_data, 'total', train_data)
+            if current_score_mrr > best_score_mrr:
                 self.__save_population(population)
 
-        self.__test_dataset(population, train_data, 'train')
-        self.__test_dataset(population, validate_data, 'validate')
-        self.__test_dataset(population, test_data, 'test')
-        self.__test_dataset(population, total_data, 'total')
+        EvolutionaryAlgorithm.__test_dataset(population, train_data, 'train', train_data)
+        EvolutionaryAlgorithm.__test_dataset(population, validate_data, 'validate', train_data)
+        EvolutionaryAlgorithm.__test_dataset(population, test_data, 'test', train_data)
+        EvolutionaryAlgorithm.__test_dataset(population, total_data, 'total', train_data)
 
     def prepare_for_testing(self):
         self.__population = self.__load_population()
         train_data = self.__load_dataset('train_data')
         validate_data = self.__load_dataset('validate_data')
         test_data = self.__load_dataset('test_data')
-        self.__test_dataset(self.__population, train_data, 'train')
-        self.__test_dataset(self.__population, validate_data, 'validate')
-        self.__test_dataset(self.__population, test_data, 'test')
+        self.__test_dataset(self.__population, train_data, 'train', test_data)
+        self.__test_dataset(self.__population, validate_data, 'validate', test_data)
+        self.__test_dataset(self.__population, test_data, 'test', test_data)
         (self.__methods_id, self.__methods_id_position, self.__methods_id_name) = self.__get_methods(self.__methods_patterns)
 
     def test(self, question, method_name):
