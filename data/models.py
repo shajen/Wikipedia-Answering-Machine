@@ -4,6 +4,7 @@ from more_itertools import unique_everseen
 import numpy as np
 import statistics
 import re
+from collections import defaultdict
 
 class ListField(models.TextField):
     def __init__(self, *args, **kwargs):
@@ -180,6 +181,14 @@ class Question(models.Model):
         words = np.array(words[:top_words], dtype=np.uint32)
         words = np.concatenate((words, np.zeros(shape=(top_words - words.shape[0]), dtype=np.uint32)), axis=0)
         return words
+
+    def get_methods_results(self, methods):
+        default_row = list(map(lambda m: float('Inf') if m.is_smaller_first else -float('Inf'), methods))
+        data = defaultdict(lambda: default_row.copy())
+        for i in range(len(methods)):
+            for (article_id, weight) in Rate.objects.filter(question_id=self.id).filter(method_id=methods[i].id).values_list('article_id', 'weight'):
+                data[article_id][i] = weight
+        return data
 
 class Answer(models.Model):
     article = models.ForeignKey(Article, on_delete=models.CASCADE)

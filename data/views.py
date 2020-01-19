@@ -27,9 +27,16 @@ def articles(request):
 
 def question(request, id):
     try:
+        order_by = int(request.GET.get('order_by', '1'))
         question = Question.objects.get(id=id)
+        methods = Method.objects.filter(is_enabled=True).order_by('name')
+        data = question.get_methods_results(methods).items()
+        data = sorted(data, key=lambda row: row[1][order_by-1], reverse=not methods[order_by-1].is_smaller_first)
+        sorted_articles_id = list(map(lambda row: row[0], data))
         answers = question.answer_set.select_related('article')
-        return render(request, 'data/question.html', {'question' :  question, 'answers' : answers})
+        answers = list(map(lambda answer: (answer, sorted_articles_id.index(answer.article.id) + 1), answers))
+        methods = list(map(lambda m: m.preety_name(), methods))
+        return render(request, 'data/question.html', {'question' :  question, 'answers' : answers, 'methods' : methods, 'data' : data})
     except ObjectDoesNotExist:
        raise Http404('Question %d not found' % id)
 

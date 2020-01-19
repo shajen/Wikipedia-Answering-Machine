@@ -14,14 +14,39 @@ Question ({{ question.id }}): {{ question.name }}
 <table class="table table-striped table-bordered table-hover">
   <tr>
     <th class="col-md-1">ID</th>
-    <th class="col-md-9">Title</th>
+    <th class="col-md-1">Position</th>
+    <th class="col-md-8">Title</th>
     <th class="col-md-2">Length</th>
   </tr>
-  {% for answer in answers %}
+  {% for answer, position in answers %}
     <tr>
       <td><a href="{% url 'article' answer.article.id %}">{{ answer.article.id }}</a></td>
+      <td>{{ position }}</td>
       <td>{{ answer.article.title }}</td>
       <td>{{ answer.article.content_words_count }}</td>
+    </tr>
+  {% endfor %}
+</table>
+
+<h3>Ranking:</h3>
+<table class="table table-striped table-bordered table-hover">
+  <tr>
+    <th class="col-md-1">Position</th>
+    <th class="col-md-1">Article</th>
+    {% for method in methods %}
+      <th class="col-md-1">
+        <a href="?order_by={{ forloop.counter }}"><span class="glyphicon glyphicon glyphicon-sort"></span></a>
+        {{ method }}
+       </th>
+    {% endfor %}
+  </tr>
+  {% for article_id, row in data %}
+    <tr>
+      <td>{{ forloop.counter }}</td>
+      <td><a href="{% url 'article' article_id %}">{{ article_id }}</a></td>
+      {% for weight in row %}
+        <td>{{ weight }}</td>
+      {% endfor %}
     </tr>
   {% endfor %}
 </table>
