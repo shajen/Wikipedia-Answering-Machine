@@ -17,3 +17,4 @@ more_itertools
 SharedArray
 deap
 matplotlib
+django-debug-toolbar

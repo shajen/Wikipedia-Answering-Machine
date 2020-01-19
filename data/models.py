@@ -5,6 +5,9 @@ import numpy as np
 import statistics
 import re
 from collections import defaultdict
+from django.utils.text import Truncator
+
+CHARS_LIMIT = 50
 
 class ListField(models.TextField):
     def __init__(self, *args, **kwargs):
@@ -52,7 +55,7 @@ class Category(models.Model):
         verbose_name_plural = "Categories"
 
     def __str__(self):
-        return self.title
+        return Truncator(self.title).chars(CHARS_LIMIT)
 
 class Article(models.Model):
     title = models.CharField(max_length=255, unique=True)
@@ -75,7 +78,7 @@ class Article(models.Model):
     added_date = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return self.title
+        return Truncator(self.title).chars(CHARS_LIMIT)
 
     def get_words(self, is_title, stop_words, top_words):
         if is_title:
@@ -96,7 +99,7 @@ class Method(models.Model):
     is_smaller_first = models.BooleanField()
 
     def __str__(self):
-        return self.name
+        return Truncator(self.name).chars(CHARS_LIMIT)
 
     def scores(self, questions_id=[], top_n=[1,10,100]):
         def p_score(n, positions):
@@ -165,7 +168,7 @@ class Question(models.Model):
     added_date = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return self.name
+        return Truncator(self.name).chars(CHARS_LIMIT)
 
     def corrected_articles(self):
         return list(map(lambda answer: answer.article, self.answer_set.all()))
@@ -226,7 +229,7 @@ class Word(models.Model):
     )
 
     def __str__(self):
-        return self.value
+        return Truncator(self.value).chars(CHARS_LIMIT)
 
 class WordForm(models.Model):
     changed_word = models.ForeignKey(Word, on_delete=models.CASCADE, related_name='from_word')
@@ -234,7 +237,7 @@ class WordForm(models.Model):
     added_date = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return '%s - %s' % (self.base_form, self.changed_form)
+        return '%s - %s' % (self.base_word, self.changed_word)
 
     class Meta:
         unique_together = ('changed_word', 'base_word')
@@ -270,6 +273,9 @@ class Rate(models.Model):
     method = models.ForeignKey(Method, on_delete=models.CASCADE)
     weight = models.FloatField()
     added_date = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return '%s - %s(%s): %.4f' % (self.question, self.article, self.method, self.weight)
 
     class Meta:
         unique_together = ('question', 'article', 'method')
