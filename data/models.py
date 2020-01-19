@@ -134,25 +134,25 @@ class Method(models.Model):
             type = vector_match.group(4)
             if type == 'cosine':
                 type = 'cosinusowa'
-            return 'kontekstowa wektorowa miara %s\ndla n = %d, dane: %s %s artykułów' % (type, n, 'słowa' if ngram == 1 else 'bigramy', 'tytułów' if title == 1 else 'treści')
+            return 'model: wektorowy n=%d, miara: %s\ndane: %s %s artykułów' % (n, type, 'słowa' if ngram == 1 else 'bigramy', 'tytułów' if title == 1 else 'treści')
         elif tfidf_match:
             title = int(tfidf_match.group(1))
             ngram = int(tfidf_match.group(2))
             n = int(tfidf_match.group(3))
             if n == 0:
-                return 'miara TF-IDF\ndane: %s %s artykułów' % ('słowa' if ngram == 1 else 'bigramy', 'tytułów' if title == 1 else 'treści')
+                return 'model: TF-IDF\ndane: %s %s artykułów' % ('słowa' if ngram == 1 else 'bigramy', 'tytułów' if title == 1 else 'treści')
             else:
-                return 'kontekstowa miara TF-IDF dla n = %d\ndane: %s %s artykułów' % (n, 'słowa' if ngram == 1 else 'bigramy', 'tytułów' if title == 1 else 'treści')
+                return 'model: kontekstowy TF-IDF n=%d\ndane: %s %s artykułów' % (n, 'słowa' if ngram == 1 else 'bigramy', 'tytułów' if title == 1 else 'treści')
         elif w2v_match:
             topn = int(w2v_match.group(1))
             title = int(w2v_match.group(2))
             if topn == 0:
-                type = 'tylko słowa zawarte w pytaniu'
+                type = 'słowa zawarte w pytaniu'
             elif topn == 10:
                 type = '10 najbliższych słów'
             else:
                 type = 'wszystkie słowa'
-            return 'word2vec %s\ndane: %s artykułów' % (type, 'tytuły' if title == 1 else 'treści')
+            return 'model: word2vec %s\ndane: %s artykułów' % (type, 'tytuły' if title == 1 else 'treści')
         elif 'type: cnn' in self.name:
             return 'CNN'
         elif 'type: dan' in self.name:
