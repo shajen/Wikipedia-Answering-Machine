@@ -134,7 +134,7 @@ def start(args, questions, method_name):
         model = calculators.deep_averaging_neural_weight_calculator.DeepAveragingNeuralWeightCalculator(data_loader, args.debug_top_items, args.cache_directory, args.neural_model_good_bad_ratio, args.neural_model_method)
         start_learning_model(args, questions, model, '%s, type: dan, %s' % (method_name, learning_count))
     if args.evolutionary_algorithm:
-        model = calculators.evolutionary_algorithm.EvolutionaryAlgorithm(args.debug_top_items, args.cache_directory, args.evolutionary_algorithm_methods_patterns, args.evolutionary_algorithm_population, args.neural_model_method)
+        model = calculators.evolutionary_algorithm.EvolutionaryAlgorithm(args.debug_top_items, args.cache_directory, args.evolutionary_algorithm_methods_patterns, args.evolutionary_algorithm_population)
         start_learning_model(args, questions, model, '%s, type: ean, p: %04d' % (method_name, args.evolutionary_algorithm_population))
     logging.info('finish')
 
