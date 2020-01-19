@@ -3,22 +3,22 @@ import matplotlib.pyplot as plt
 import matplotlib
 import os
 
-def plot(global_pattern, patterns, fontsize, i):
-    data = []
-    labels = []
-    for pattern in patterns:
-        for method in Method.objects.filter(is_enabled=True).filter(name__contains=pattern).filter(name__contains=global_pattern).order_by('name'):
-            (count, scores) = method.scores()
-            data.append(scores[i])
-            labels.append(method.preety_name())
+def plot(fontsize, i):
+    methods = Method.objects.filter(is_enabled=True).order_by('-name')
+    filename = '/home/shajen/mgr/praca/images/model_summary_%d.png' % i
+    data = list(map(lambda m: m.scores()[1][i], methods))
+    plot_data(filename, data, fontsize)
 
+def plot_data(filename, data, fontsize):
+    methods = Method.objects.filter(is_enabled=True).order_by('-name')
+    labels = list(map(lambda m: m.preety_name(), methods))
     pos = list(range(len(data)))
+
     plt.figure(figsize=(5, 8))
     plt.grid(axis='x', linestyle='--')
     plt.barh(pos, data)
     plt.yticks(pos, labels, fontsize=fontsize)
 
-    filename = '/home/shajen/mgr/praca/images/model_summary_%d.png' % i
     try:
         os.remove(filename)
     except:
@@ -28,11 +28,10 @@ def plot(global_pattern, patterns, fontsize, i):
     plt.clf()
 
 def run(*args):
-    global_pattern = 'final'
-    patterns = ['pf', 'w2v', 'cosine', 'euclidean', 'cityblock']
-    patterns.reverse()
     fontsize = 5
-    plot(global_pattern, patterns, fontsize, 0)
-    plot(global_pattern, patterns, fontsize, 1)
-    plot(global_pattern, patterns, fontsize, 2)
-    plot(global_pattern, patterns, fontsize, 3)
+    plot(fontsize, 0)
+    plot(fontsize, 1)
+    plot(fontsize, 2)
+    plot(fontsize, 3)
+    data = list(range(22))
+    plot_data('/home/shajen/mgr/praca/images/model_ea.png', data, fontsize)
