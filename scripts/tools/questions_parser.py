@@ -8,19 +8,19 @@ class QuestionsParser:
     def __init__(self, min_article_character):
         logging.info('reading articles')
         self.min_article_character = min_article_character
-        articles = Article.objects.values('id', 'content_words_count', 'title', 'redirected_to_id')
         self.articles_redirected_to = {}
         self.articles_content_count = {}
         self.articles_title = {}
         self.titles_article = {}
-        for article in articles:
-            if article['redirected_to_id']:
-                self.articles_redirected_to[article['id']] = article['redirected_to_id']
-            self.articles_content_count[article['id']] = article['content_words_count']
-            self.articles_title[article['id']] = article['title']
-            self.titles_article[article['title']] = article['id']
+        for (id, content_words_count, title, redirected_to_id) in Article.objects.values_list('id', 'content_words_count', 'title', 'redirected_to_id'):
+            if redirected_to_id:
+                self.articles_redirected_to[id] = redirected_to_id
+            self.articles_content_count[id] = content_words_count
+            self.articles_title[id] = title
+            self.titles_article[title] = id
 
     def parse_file(self, file):
+        questions_id = []
         logging.info('parsing questions: %s' % file)
         fp = open(file, 'r')
         while True:
@@ -34,8 +34,9 @@ class QuestionsParser:
             while answer != '':
                 answers.append(answer.lower())
                 answer = fp.readline().strip()
-            self.parse_question(question, answers)
+            questions_id.append(self.parse_question(question, answers))
         logging.info('finish')
+        return questions_id
 
     def parse_question(self, question_text, answers):
         logging.debug('question:')
@@ -91,7 +92,10 @@ class QuestionsParser:
                 if question.answer_set.count() == 0:
                     logging.debug('delete question without answer: %d %s' % (question.id, question_text))
                     question.delete()
+                else:
+                    return question.id
             except Exception as e:
                 logging.warning('exception during delete question:')
                 logging.warning(e)
                 logging.warning(question_text)
+        return -1
