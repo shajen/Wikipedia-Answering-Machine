@@ -6,23 +6,23 @@ Question ({{ question.id }}): {{ question.name }}
 
 {% block content %}
 <div>
-  <h3>Question {{ question.id }}</h3>
-  <h4>{{ question.name }}</h4>
+  <h3>Question <a href="{% url 'question' question.id %}">{{ question.id }}</a></h3>
+  <h4><a href="https://www.google.com/search?q=site:pl.wikipedia.org {{ question.name }}">{{ question.name }}</a></h4>
 </div>
 
-<h3>Articles:</h3>
+<h3>Answers:</h3>
 <table class="table table-striped table-bordered table-hover">
   <tr>
-    <th class="col-md-1">ID</th>
     <th class="col-md-1">Position</th>
+    <th class="col-md-1">ID</th>
     <th class="col-md-8">Title</th>
     <th class="col-md-2">Length</th>
   </tr>
   {% for answer, position in answers %}
     <tr>
-      <td><a href="{% url 'article' answer.article.id %}">{{ answer.article.id }}</a></td>
       <td>{{ position }}</td>
-      <td>{{ answer.article.title }}</td>
+      <td><a href="{% url 'article' answer.article.id %}">{{ answer.article.id }}</a></td>
+      <td><a href="https://www.google.com/search?q=site:pl.wikipedia.org {{ answer.article.title }}">{{ answer.article.title }}</a></td>
       <td>{{ answer.article.content_words_count }}</td>
     </tr>
   {% endfor %}
@@ -32,7 +32,9 @@ Question ({{ question.id }}): {{ question.name }}
 <table class="table table-striped table-bordered table-hover">
   <tr>
     <th class="col-md-1">Position</th>
-    <th class="col-md-1">Article</th>
+    <th class="col-md-1">ID</th>
+    <th class="col-md-1">Title</th>
+    <th class="col-md-2">Length</th>
     {% for method in methods %}
       <th class="col-md-1">
         <a href="?order_by={{ forloop.counter }}"><span class="glyphicon glyphicon glyphicon-sort"></span></a>
@@ -40,12 +42,14 @@ Question ({{ question.id }}): {{ question.name }}
        </th>
     {% endfor %}
   </tr>
-  {% for article_id, row in data %}
+  {% for article, row in data %}
     <tr>
       <td>{{ forloop.counter }}</td>
-      <td><a href="{% url 'article' article_id %}">{{ article_id }}</a></td>
+      <td><a href="{% url 'article' article.id %}">{{ article.id }}</a></td>
+      <td><a href="https://www.google.com/search?q=site:pl.wikipedia.org {{ article.title }}">{{ article.title }}</a></td>
+      <td>{{ article.content_words_count }}</td>
       {% for weight in row %}
-        <td>{{ weight }}</td>
+        <td>{{ weight|floatformat:4 }}</td>
       {% endfor %}
     </tr>
   {% endfor %}

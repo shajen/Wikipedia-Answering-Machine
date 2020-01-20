@@ -32,9 +32,14 @@ def question(request, id):
         methods = Method.objects.filter(is_enabled=True).order_by('name')
         data = question.get_methods_results(methods).items()
         data = sorted(data, key=lambda row: row[1][order_by-1], reverse=not methods[order_by-1].is_smaller_first)
-        sorted_articles_id = list(map(lambda row: row[0], data))
+        sorted_articles_id = list(map(lambda row: row[0].id, data))
         answers = question.answer_set.select_related('article')
-        answers = list(map(lambda answer: (answer, sorted_articles_id.index(answer.article.id) + 1), answers))
+        def position(answer):
+            try:
+                return sorted_articles_id.index(answer.article.id) + 1
+            except ValueError:
+                return -1
+        answers = list(map(lambda answer: (answer, position(answer)), answers))
         methods = list(map(lambda m: m.preety_name(), methods))
         return render(request, 'data/question.html', {'question' :  question, 'answers' : answers, 'methods' : methods, 'data' : data})
     except ObjectDoesNotExist:

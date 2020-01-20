@@ -189,8 +189,8 @@ class Question(models.Model):
         default_row = list(map(lambda m: float('Inf') if m.is_smaller_first else -float('Inf'), methods))
         data = defaultdict(lambda: default_row.copy())
         for i in range(len(methods)):
-            for (article_id, weight) in Rate.objects.filter(question_id=self.id).filter(method_id=methods[i].id).values_list('article_id', 'weight'):
-                data[article_id][i] = weight
+            for rate in Rate.objects.filter(question_id=self.id).filter(method_id=methods[i].id).select_related('article'):
+                data[rate.article][i] = rate.weight
         return data
 
 class Answer(models.Model):
