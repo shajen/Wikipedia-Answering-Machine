@@ -214,7 +214,8 @@ class EvolutionaryAlgorithm():
         for question_id in data:
             question = Question.objects.get(id=question_id)
             if not tools.results_presenter.ResultsPresenter.is_already_solved(question, method.name):
-                (articles_id, scores, corrected_articles_id, corrected_articles_index) = self.__get_articles_scores(individual, question_id, data)
+                (articles_id, articles_data, corrected_articles_id, corrected_articles_index) = data[question_id]
+                scores = np.sum(articles_data * individual, axis=1)
                 tools.results_presenter.ResultsPresenter.present(question, articles_id, scores, method, debug_top_items, False)
 
     def __test_dataset(population, data, dataset, train_data):
