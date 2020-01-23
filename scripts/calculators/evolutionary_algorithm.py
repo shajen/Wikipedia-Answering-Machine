@@ -12,7 +12,7 @@ import random
 import tools.results_presenter
 import statistics
 import multiprocessing
-from scripts.generate_graphs import plot_data
+import tools.graphs
 
 DATA = None
 DEBUG = False
@@ -226,10 +226,13 @@ class EvolutionaryAlgorithm():
         individual = ', '.join(['%.4f' % w for w in individual])
         logging.info('best individual: [%s]' % individual)
 
-    def __make_graph(population, n, is_better):
+    def __make_graph(workdir, population, n, is_better, methods_id, data, train_data):
         individual = deap.tools.selBest(population, k=1)[0]
-        individual.reverse()
-        plot_data('/home/shajen/mgr/praca/images/ea/model_ea_%03d_%d.png' % (n, is_better), individual, 5)
+        ((mrr, ), (p1, )) = EvolutionaryAlgorithm.__get_best_score(population, data, train_data)
+        title = 'p: %d, i: %d, MRR: %.4f, p1: %.4f' % (len(population), len(individual), mrr, p1)
+        methods = [Method.objects.get(id=id) for id in methods_id]
+        labels = list(map(lambda m: m.preety_name(), methods))
+        tools.graphs.plot_bar('%s/ea_model_results_%03d_%d.png' % (workdir, n, is_better), individual, labels, title=title)
 
     def train(self, train_questions, validate_questions, test_questions, epoch):
         if epoch == 0:
@@ -271,12 +274,12 @@ class EvolutionaryAlgorithm():
             logging.info('create new population')
 
         EvolutionaryAlgorithm.__show_best_individual(population)
-        EvolutionaryAlgorithm.__make_graph(population, 0, True)
+        EvolutionaryAlgorithm.__make_graph(self.__workdir, population, 0, True, methods_id, validate_data, train_data)
         EvolutionaryAlgorithm.__test_dataset(population, train_data, 'train', train_data)
         EvolutionaryAlgorithm.__test_dataset(population, validate_data, 'validate', train_data)
         EvolutionaryAlgorithm.__test_dataset(population, test_data, 'test', train_data)
         EvolutionaryAlgorithm.__test_dataset(population, total_data, 'total', train_data)
-        (best_score_mrr, best_score_p1) = EvolutionaryAlgorithm.__get_best_score(population, validate_data)
+        (best_score_mrr, best_score_p1) = EvolutionaryAlgorithm.__get_best_score(population, validate_data, train_data)
 
         for e in range(epoch):
             logging.info("generation: %d/%d" % (e+1, epoch))
@@ -291,7 +294,7 @@ class EvolutionaryAlgorithm():
             EvolutionaryAlgorithm.__test_dataset(current_population, validate_data, 'validate', train_data)
             EvolutionaryAlgorithm.__test_dataset(current_population, test_data, 'test', train_data)
             EvolutionaryAlgorithm.__test_dataset(current_population, total_data, 'total', train_data)
-            EvolutionaryAlgorithm.__make_graph(population, e+1, current_score_mrr > best_score_mrr)
+            EvolutionaryAlgorithm.__make_graph(self.__workdir, population, e+1, current_score_mrr > best_score_mrr, methods_id, validate_data, train_data)
             population = current_population
             if current_score_mrr > best_score_mrr:
                 best_score_mrr = current_score_mrr

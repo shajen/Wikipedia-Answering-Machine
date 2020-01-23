@@ -134,7 +134,10 @@ def start(args, questions, method_name):
         model = calculators.deep_averaging_neural_weight_calculator.DeepAveragingNeuralWeightCalculator(data_loader, args.debug_top_items, args.cache_directory, args.neural_model_good_bad_ratio, args.neural_model_method)
         start_learning_model(args, questions, model, '%s, type: dan, %s' % (method_name, learning_count))
     if args.evolutionary_algorithm:
-        model = calculators.evolutionary_algorithm.EvolutionaryAlgorithm(args.debug_top_items, args.cache_directory, args.evolutionary_algorithm_methods_patterns, args.evolutionary_algorithm_exclude_methods_patterns, args.evolutionary_algorithm_population)
+        workdir = args.cache_directory + '/ea/'
+        if not os.path.isdir(workdir):
+            os.mkdir(workdir)
+        model = calculators.evolutionary_algorithm.EvolutionaryAlgorithm(args.debug_top_items, workdir, args.evolutionary_algorithm_methods_patterns, args.evolutionary_algorithm_exclude_methods_patterns, args.evolutionary_algorithm_population)
         start_learning_model(args, questions, model, '%s, type: ean, p: %04d' % (method_name, args.evolutionary_algorithm_population))
     logging.info('finish')
 
@@ -152,6 +155,8 @@ def run(*args):
     logging.getLogger("gensim").setLevel(logging.WARNING)
     logging.getLogger("tensorflow").setLevel(logging.WARNING)
     logging.getLogger("smart_open.smart_open_lib").setLevel(logging.WARNING)
+    logging.getLogger('matplotlib.font_manager').setLevel(logging.INFO)
+
     try:
         args = shlex.split(args[0])
     except IndexError:
