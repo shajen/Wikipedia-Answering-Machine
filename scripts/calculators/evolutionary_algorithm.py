@@ -59,22 +59,27 @@ def score_mrr(individual):
     return (1 / statistics.harmonic_mean(total_positions), )
 
 class EvolutionaryAlgorithm():
-    def __init__(self, debug_top_items, workdir, methods_patterns, population):
+    def __init__(self, debug_top_items, workdir, methods_patterns, exclude_methods_patterns, population):
         self.__debug_top_items = debug_top_items
         self.__workdir = workdir
         self.__methods_patterns = methods_patterns
+        self.__exclude_methods_patterns = exclude_methods_patterns
         self.__population = population
 
     def model_name(self):
         return 'ea'
 
-    def __get_methods(self, methods_patterns):
+    def __get_methods(self, methods_patterns, exclude_methods_patterns):
         methods_id = set(Method.objects.filter(is_enabled=True).values_list('id', flat=True))
         if methods_patterns:
             for pattern in methods_patterns.split(','):
                 methods_id = methods_id & set(Method.objects.filter(name__contains=pattern).values_list('id', flat=True))
 
-        methods_id = list(Method.objects.filter(id__in=methods_id).order_by('name').values_list('id', flat=True))
+        if exclude_methods_patterns:
+            exclude_methods_patterns = exclude_methods_patterns.split(',')
+            methods_id = list(Method.objects.filter(id__in=methods_id).exclude(method_name__in=exclude_methods_patterns).order_by('name').values_list('id', flat=True))
+        else:
+            methods_id = list(Method.objects.filter(id__in=methods_id).order_by('name').values_list('id', flat=True))
         logging.info(methods_id)
         methods_id_position = {}
         methods_id_name = {}
@@ -230,7 +235,7 @@ class EvolutionaryAlgorithm():
         if epoch == 0:
             return
 
-        (methods_id, methods_id_position, methods_id_name) = self.__get_methods(self.__methods_patterns)
+        (methods_id, methods_id_position, methods_id_name) = self.__get_methods(self.__methods_patterns, self.__exclude_methods_patterns)
         train_data = self.__prepare_dataset(train_questions, 'train_data', methods_id, methods_id_position, methods_id_name)
         validate_data = self.__prepare_dataset(validate_questions, 'validate_data', methods_id, methods_id_position, methods_id_name)
         test_data = self.__prepare_dataset(test_questions, 'test_data', methods_id, methods_id_position, methods_id_name)
@@ -308,7 +313,7 @@ class EvolutionaryAlgorithm():
         self.__test_dataset(self.__population, train_data, 'train', test_data)
         self.__test_dataset(self.__population, validate_data, 'validate', test_data)
         self.__test_dataset(self.__population, test_data, 'test', test_data)
-        (self.__methods_id, self.__methods_id_position, self.__methods_id_name) = self.__get_methods(self.__methods_patterns)
+        (self.__methods_id, self.__methods_id_position, self.__methods_id_name) = self.__get_methods(self.__methods_patterns, self.__exclude_methods_patterns)
 
     def test(self, question, method_name):
         data = self.__prepare_question(question, self.__methods_id, self.__methods_id_position, self.__methods_id_name)
