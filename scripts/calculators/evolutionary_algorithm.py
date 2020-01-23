@@ -159,19 +159,19 @@ class EvolutionaryAlgorithm():
 
         return data
 
-    def __load_dataset(self, dataset):
-        return self.__load_data('ea_' + dataset)
+    def __load_dataset(self, dataset, methods_id):
+        return self.__load_data('m%02d_ea_%s' % (len(methods_id), dataset))
 
     def __prepare_dataset(self, questions, dataset, methods_id, methods_id_position, methods_id_name):
         try:
-            data = self.__load_dataset(dataset)
+            data = self.__load_data('m%02d_ea_%s' % (len(methods_id), dataset))
             logging.info('loading %s succesful' % dataset)
             logging.info('%s size: %d' % (dataset, len(data)))
             return data
         except:
             logging.info('generating new %s' % dataset)
             data = self.__generate_dataset(questions, dataset, methods_id, methods_id_position, methods_id_name)
-            self.__save_data(data, 'ea_' + dataset)
+            self.__save_data(data, 'm%02d_ea_%s' % (len(methods_id), dataset))
             return data
 
     def __save_data(self, data, name):
@@ -186,16 +186,16 @@ class EvolutionaryAlgorithm():
         with open(filename, "rb") as file:
             return pickle.load(file)
 
-    def __load_population(self):
+    def __load_population(self, methods_id):
         logging.debug('loading population')
-        data = self.__load_data('ea_population')
+        data = self.__load_data('m%02d_ea_population' % len(methods_id))
         random.setstate(data["rndstate"])
         return data["population"]
 
-    def __save_population(self, population):
+    def __save_population(self, population, methods_id):
         logging.debug('saving population')
         data = dict(population=population, rndstate=random.getstate())
-        self.__save_data(data, 'ea_population')
+        self.__save_data(data, 'm%02d_ea_population' % len(methods_id))
 
     def __get_best_score(population, data, train_data):
         global DATA
@@ -230,10 +230,10 @@ class EvolutionaryAlgorithm():
     def __make_graph(workdir, population, n, is_better, methods_id, data, train_data):
         individual = deap.tools.selBest(population, k=1)[0]
         ((mrr, ), (p1, )) = EvolutionaryAlgorithm.__get_best_score(population, data, train_data)
-        title = 'p: %d, i: %d, MRR: %.4f, p1: %.4f' % (len(population), len(individual), mrr, p1)
+        title = 'p: %d, MRR: %.4f, p1: %.4f' % (len(population), mrr, p1)
         methods = [Method.objects.get(id=id) for id in methods_id]
         labels = list(map(lambda m: m.preety_name(), methods))
-        tools.graphs.plot_bar('%s/ea_model_results_%03d_%d.png' % (workdir, n, is_better), individual, labels, title=title)
+        tools.graphs.plot_bar('%s/m%02d_ea_model_results_%03d_%d.png' % (workdir, len(methods_id), n, is_better), individual, labels, title=title)
 
     def train(self, train_questions, validate_questions, test_questions, epoch):
         if epoch == 0:
@@ -267,7 +267,7 @@ class EvolutionaryAlgorithm():
         toolbox.register("map", pool.map)
 
         try:
-            population = self.__load_population()
+            population = self.__load_population(methods_id)
             logging.info('load population succesful')
         except Exception as e:
             logging.error(e)
@@ -300,7 +300,7 @@ class EvolutionaryAlgorithm():
             if current_score_mrr > best_score_mrr:
                 best_score_mrr = current_score_mrr
                 logging.info('population saved')
-                self.__save_population(population)
+                self.__save_population(population, methods_id)
             else:
                 logging.info('population skipped')
 
@@ -310,14 +310,14 @@ class EvolutionaryAlgorithm():
         EvolutionaryAlgorithm.__test_dataset(population, total_data, 'total', train_data)
 
     def prepare_for_testing(self):
-        self.__population = self.__load_population()
-        train_data = self.__load_dataset('train_data')
-        validate_data = self.__load_dataset('validate_data')
-        test_data = self.__load_dataset('test_data')
+        self.__population = self.__load_population(methods_id)
+        (self.__methods_id, self.__methods_id_position, self.__methods_id_name) = self.__get_methods(self.__methods_patterns, self.__exclude_methods_patterns)
+        train_data = self.__load_dataset('train_data', self.__methods_id)
+        validate_data = self.__load_dataset('validate_data', self.__methods_id)
+        test_data = self.__load_dataset('test_data', self.__methods_id)
         self.__test_dataset(self.__population, train_data, 'train', test_data)
         self.__test_dataset(self.__population, validate_data, 'validate', test_data)
         self.__test_dataset(self.__population, test_data, 'test', test_data)
-        (self.__methods_id, self.__methods_id_position, self.__methods_id_name) = self.__get_methods(self.__methods_patterns, self.__exclude_methods_patterns)
 
     def test(self, question, method_name):
         data = self.__prepare_question(question, self.__methods_id, self.__methods_id_position, self.__methods_id_name)
