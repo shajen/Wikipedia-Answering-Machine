@@ -116,6 +116,12 @@ def start_learning_model(args, questions, model, method_name):
             if not tools.results_presenter.ResultsPresenter.is_already_solved(question, method_name):
                 model.test(question, method_name)
 
+def get_workdir(workdir, name):
+    workdir = '%s/%s/' % (workdir, 'ea')
+    if not os.path.isdir(workdir):
+        os.mkdir(workdir)
+    return workdir
+
 def start(args, questions, method_name):
     learning_model_count = (args.learning_model_questions_words_count, args.learning_model_articles_title_words_count, args.learning_model_articles_content_words_count)
     classic_model_count = (args.classic_model_questions_words_count, args.classic_model_articles_title_words_count, args.classic_model_articles_content_words_count)
@@ -128,16 +134,13 @@ def start(args, questions, method_name):
         data_loader.load_word2vec_model()
         start_callback_threads(args, questions, '%s, type: w2v, topn: %03d, title: %d, %s' % (method_name, args.topn, args.title, learning_count), resolve_questions_word2vec, (data_loader,))
     if args.convolution_neural_network:
-        model = calculators.neural_weight_calculator.NeuralWeightCalculator(data_loader, args.debug_top_items, args.cache_directory, args.neural_model_good_bad_ratio, args.neural_model_method)
+        model = calculators.neural_weight_calculator.NeuralWeightCalculator(data_loader, args.debug_top_items, get_workdir(args.cache_directory, 'nn'), args.neural_model_good_bad_ratio, args.neural_model_method)
         start_learning_model(args, questions, model, '%s, type: cnn, %s' % (method_name, learning_count))
     if args.deep_averaging_network:
-        model = calculators.deep_averaging_neural_weight_calculator.DeepAveragingNeuralWeightCalculator(data_loader, args.debug_top_items, args.cache_directory, args.neural_model_good_bad_ratio, args.neural_model_method)
+        model = calculators.deep_averaging_neural_weight_calculator.DeepAveragingNeuralWeightCalculator(data_loader, args.debug_top_items, get_workdir(args.cache_directory, 'nn'), args.neural_model_good_bad_ratio, args.neural_model_method)
         start_learning_model(args, questions, model, '%s, type: dan, %s' % (method_name, learning_count))
     if args.evolutionary_algorithm:
-        workdir = args.cache_directory + '/ea/'
-        if not os.path.isdir(workdir):
-            os.mkdir(workdir)
-        model = calculators.evolutionary_algorithm.EvolutionaryAlgorithm(args.debug_top_items, workdir, args.evolutionary_algorithm_methods_patterns, args.evolutionary_algorithm_exclude_methods_patterns, args.evolutionary_algorithm_population)
+        model = calculators.evolutionary_algorithm.EvolutionaryAlgorithm(args.debug_top_items, get_workdir(args.cache_directory, 'ea'), args.evolutionary_algorithm_methods_patterns, args.evolutionary_algorithm_exclude_methods_patterns, args.evolutionary_algorithm_population)
         start_learning_model(args, questions, model, '%s, type: ean, p: %04d' % (method_name, args.evolutionary_algorithm_population))
     logging.info('finish')
 
