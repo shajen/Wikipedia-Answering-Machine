@@ -2,7 +2,6 @@ from django.conf.urls import url
 from django.contrib import admin
 from django.urls import path, include
 import data.views
-import debug_toolbar
 
 urlpatterns = [
     url(r'^admin/', admin.site.urls),
@@ -13,5 +12,4 @@ urlpatterns = [
     path('questions/<int:id>/', data.views.question, name='question'),
     path('methods/', data.views.methods, name='methods'),
     path('methods/<int:id>/', data.views.method, name='method'),
-    path('__debug__/', include(debug_toolbar.urls)),
 ]
