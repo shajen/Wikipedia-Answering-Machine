@@ -141,7 +141,7 @@ def start(args, questions, method_name):
         start_learning_model(args, questions, model, '%s, type: dan, %s' % (method_name, learning_count))
     if args.evolutionary_algorithm:
         model = calculators.evolutionary_algorithm.EvolutionaryAlgorithm(args.debug_top_items, get_workdir(args.cache_directory, 'ea'), args.evolutionary_algorithm_methods_patterns, args.evolutionary_algorithm_exclude_methods_patterns, args.evolutionary_algorithm_population)
-        start_learning_model(args, questions, model, '%s, type: ean, p: %04d' % (method_name, args.evolutionary_algorithm_population))
+        start_learning_model(args, questions, model, '%s, type: ean, p: %04d, mp: %s, emp: %s' % (method_name, args.evolutionary_algorithm_population, args.evolutionary_algorithm_methods_patterns, args.evolutionary_algorithm_exclude_methods_patterns))
     logging.info('finish')
 
 def get_method_name(args):
