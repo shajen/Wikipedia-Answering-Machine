@@ -236,6 +236,10 @@ class EvolutionaryAlgorithm():
         labels = list(map(lambda m: m.preety_name(), methods))
         tools.graphs.plot_bar('%s/m%02d_ea_model_results_%03d_%d.png' % (workdir, len(methods_id), n, is_better), individual, labels, title=title)
 
+    def __create(self):
+        deap.creator.create("Fitness", deap.base.Fitness, weights=(1.0,))
+        deap.creator.create("Individual", list, fitness=deap.creator.Fitness)
+
     def train(self, train_questions, validate_questions, test_questions, epoch):
         if epoch == 0:
             return
@@ -249,13 +253,11 @@ class EvolutionaryAlgorithm():
         total_data.update(validate_data)
         total_data.update(test_data)
 
-        deap.creator.create("Fitness", deap.base.Fitness, weights=(1.0,))
-        deap.creator.create("Individual", list, fitness=deap.creator.Fitness)
-
         global score_mrr
         global DATA
         DATA = train_data
 
+        self.__create()
         toolbox = deap.base.Toolbox()
         toolbox.register("weight", random.uniform, 0.0, 1.0)
         toolbox.register("individual", deap.tools.initRepeat, deap.creator.Individual, toolbox.weight, n=len(methods_id))
@@ -311,14 +313,15 @@ class EvolutionaryAlgorithm():
         EvolutionaryAlgorithm.__test_dataset(population, total_data, 'total', train_data)
 
     def prepare_for_testing(self):
-        self.__population = self.__load_population(methods_id)
+        self.__create()
         (self.__methods_id, self.__methods_id_position, self.__methods_id_name) = self.__get_methods(self.__methods_patterns, self.__exclude_methods_patterns)
+        self.__population = self.__load_population(self.__methods_id)
         train_data = self.__load_dataset('train_data', self.__methods_id)
         validate_data = self.__load_dataset('validate_data', self.__methods_id)
         test_data = self.__load_dataset('test_data', self.__methods_id)
-        self.__test_dataset(self.__population, train_data, 'train', test_data)
-        self.__test_dataset(self.__population, validate_data, 'validate', test_data)
-        self.__test_dataset(self.__population, test_data, 'test', test_data)
+        EvolutionaryAlgorithm.__test_dataset(self.__population, train_data, 'train', test_data)
+        EvolutionaryAlgorithm.__test_dataset(self.__population, validate_data, 'validate', test_data)
+        EvolutionaryAlgorithm.__test_dataset(self.__population, test_data, 'test', test_data)
 
     def test(self, question, method_name):
         data = self.__prepare_question(question, self.__methods_id, self.__methods_id_position, self.__methods_id_name)
