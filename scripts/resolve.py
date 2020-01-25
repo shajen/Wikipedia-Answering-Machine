@@ -117,7 +117,7 @@ def start_learning_model(args, questions, model, method_name):
                 model.test(question, method_name)
 
 def get_workdir(workdir, name):
-    workdir = '%s/%s/' % (workdir, 'ea')
+    workdir = '%s/%s/' % (workdir, name)
     if not os.path.isdir(workdir):
         os.mkdir(workdir)
     return workdir
