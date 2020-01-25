@@ -7,6 +7,7 @@ import numpy as np
 import os
 import tensorflow as tf
 import re
+import gc
 
 class NeuralWeightCalculator():
     __ARTICLES_PER_CHUNK = 1000
@@ -282,7 +283,7 @@ class NeuralWeightCalculator():
 
         def on_epoch_end(current_epoch, data):
             try:
-                logging.info("after epoch %d/%d, loss: %.6f, accuracy: %.6f, val_loss: %.6f, val_accuracy: %.6f" % (current_epoch, epoch, data['loss'], data['accuracy'], data['val_loss'], data['val_accuracy']))
+                logging.info("after epoch %d/%d, loss: %.6f, accuracy: %.6f, val_loss: %.6f, val_accuracy: %.6f" % (current_epoch+1, epoch, data['loss'], data['accuracy'], data['val_loss'], data['val_accuracy']))
                 # self.__test_model('train', model)
                 # self.__test_model('validate', model)
             except:
@@ -311,6 +312,7 @@ class NeuralWeightCalculator():
         except KeyboardInterrupt:
             logging.info('learing stoppped by user')
 
+        gc.collect()
         self.__test_model('train', model)
         self.__test_model('validate', model)
         self.__test_model('test', model)
@@ -359,6 +361,7 @@ class NeuralWeightCalculator():
 
     def prepare_for_testing(self):
         logging.info('prepare for testing: %s' % self.model_name())
+        gc.collect()
         model = self.__load_model()
         (self.__questions_model, articles_model) = self.__extract_models(model)
         self.__bypass_model = self.__create_distances_model(NeuralWeightCalculator.__FILTERS, True)
@@ -377,6 +380,7 @@ class NeuralWeightCalculator():
         articles_id_chunks = np.array_split(self.__articles_id, chunks)
         current = 0
         for i in range(0, chunks):
+            gc.collect()
             articles_title = self.__prepare_articles(articles_id_chunks[i], self.__articles_title_words, True, False)
             articles_content = self.__prepare_articles(articles_id_chunks[i], self.__articles_content_words, False, False)
             chunk_output = articles_model.predict({ 'articles_title': articles_title, 'articles_content': articles_content }, batch_size=256, verbose=0)
@@ -386,6 +390,9 @@ class NeuralWeightCalculator():
 
         logging.info('articles id: %s' % str(self.__articles_id.shape))
         logging.info('articles output: %s' % str(self.__articles_output.shape))
+        gc.collect()
+        self.__articles_output = tf.convert_to_tensor(self.__articles_output)
 
     def test(self, question, method_name):
+        gc.collect()
         self.__full_test_questions(method_name, question.id, self.__articles_id, self.__articles_output, self.__questions_model, self.__bypass_model)
