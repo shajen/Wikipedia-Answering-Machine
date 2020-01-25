@@ -9,7 +9,7 @@ import tensorflow as tf
 import re
 
 class NeuralWeightCalculator():
-    __ARTICLES_CHUNKS = 100
+    __ARTICLES_PER_CHUNK = 1000
     __FILTERS = 64
 
     def __init__(self, data_loader, debug_top_items, workdir, good_bad_ratio, method_id):
@@ -373,16 +373,16 @@ class NeuralWeightCalculator():
 
         self.__articles_id = self.__data_loader.get_articles_id()
         self.__articles_output = np.zeros(shape=(0, articles_model.output_shape[1]))
-        articles_id_chunks = np.array_split(self.__articles_id, NeuralWeightCalculator.__ARTICLES_CHUNKS)
+        chunks = int(self.__articles_id.shape[0] / NeuralWeightCalculator.__ARTICLES_PER_CHUNK)
+        articles_id_chunks = np.array_split(self.__articles_id, chunks)
         current = 0
-        total = NeuralWeightCalculator.__ARTICLES_CHUNKS
-        for i in range(0, NeuralWeightCalculator.__ARTICLES_CHUNKS):
+        for i in range(0, chunks):
             articles_title = self.__prepare_articles(articles_id_chunks[i], self.__articles_title_words, True, False)
             articles_content = self.__prepare_articles(articles_id_chunks[i], self.__articles_content_words, False, False)
             chunk_output = articles_model.predict({ 'articles_title': articles_title, 'articles_content': articles_content }, batch_size=256, verbose=0)
             self.__articles_output = np.concatenate((self.__articles_output, chunk_output), axis=0)
             current += 1
-            logging.debug("progress: %d/%d (%.2f %%)" % (current, total, current / total * 100))
+            logging.info("progress: %d/%d (%.2f %%)" % (current, chunks, current / chunks * 100))
 
         logging.info('articles id: %s' % str(self.__articles_id.shape))
         logging.info('articles output: %s' % str(self.__articles_output.shape))
