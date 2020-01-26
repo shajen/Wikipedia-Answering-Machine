@@ -359,23 +359,18 @@ class NeuralWeightCalculator():
         for i in model.outputs:
             logging.debug("    %s" % str(i.shape))
 
-    def prepare_for_testing(self):
-        logging.info('prepare for testing: %s' % self.model_name())
+    def __prepare_articles_for_testing(self, model):
         gc.collect()
-        model = self.__load_model()
-        (self.__questions_model, articles_model) = self.__extract_models(model)
-        self.__bypass_model = self.__create_distances_model(NeuralWeightCalculator.__FILTERS, True)
-        self.__prepare_bypass_model(model, self.__bypass_model)
         NeuralWeightCalculator.__print_model(model)
         NeuralWeightCalculator.__print_model(self.__questions_model)
-        NeuralWeightCalculator.__print_model(articles_model)
+        NeuralWeightCalculator.__print_model(self.__articles_model)
         NeuralWeightCalculator.__print_model(self.__bypass_model)
         self.__test_model('train', model)
         self.__test_model('validate', model)
         self.__test_model('test', model)
 
         self.__articles_id = self.__data_loader.get_articles_id()
-        self.__articles_output = np.zeros(shape=(0, articles_model.output_shape[1]))
+        self.__articles_output = np.zeros(shape=(0, self.__articles_model.output_shape[1]))
         chunks = int(self.__articles_id.shape[0] / NeuralWeightCalculator.__ARTICLES_PER_CHUNK)
         articles_id_chunks = np.array_split(self.__articles_id, chunks)
         current = 0
@@ -383,10 +378,26 @@ class NeuralWeightCalculator():
             gc.collect()
             articles_title = self.__prepare_articles(articles_id_chunks[i], self.__articles_title_words, True, False)
             articles_content = self.__prepare_articles(articles_id_chunks[i], self.__articles_content_words, False, False)
-            chunk_output = articles_model.predict({ 'articles_title': articles_title, 'articles_content': articles_content }, batch_size=256, verbose=0)
+            chunk_output = self.__articles_model.predict({ 'articles_title': articles_title, 'articles_content': articles_content }, batch_size=256, verbose=0)
             self.__articles_output = np.concatenate((self.__articles_output, chunk_output), axis=0)
             current += 1
             logging.info("progress: %d/%d (%.2f %%)" % (current, chunks, current / chunks * 100))
+
+    def prepare_for_testing(self):
+        logging.info('prepare for testing: %s' % self.model_name())
+
+        model = self.__load_model()
+        (self.__questions_model, self.__articles_model) = self.__extract_models(model)
+        self.__bypass_model = self.__create_distances_model(NeuralWeightCalculator.__FILTERS, True)
+        self.__prepare_bypass_model(model, self.__bypass_model)
+
+        try:
+            self.__articles_id = self.__load_file(self.model_name() + '_articles_id')
+            self.__articles_output = self.__load_file(self.model_name() + '_articles_output')
+        except FileNotFoundError:
+            self.__prepare_articles_for_testing(model)
+            self.__save_file(self.model_name() + '_articles_id', self.__articles_id)
+            self.__save_file(self.model_name() + '_articles_output', self.__articles_output)
 
         logging.info('articles id: %s' % str(self.__articles_id.shape))
         logging.info('articles output: %s' % str(self.__articles_output.shape))
