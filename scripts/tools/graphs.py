@@ -8,8 +8,8 @@ def plot_bar(filename, data, labels, **kwargs):
     plt.clf()
 
     if reverse:
-        data.reverse()
-        labels.reverse()
+        data = list(reversed(data))
+        labels = list(reversed(labels))
 
     pos = list(range(len(data)))
 
