@@ -60,6 +60,7 @@ def plot_multibar(filename, data, labels, group_labels, **kwargs):
     fig.tight_layout()
     if y_scale:
         plt.setp(ax, ylim=y_scale)
+    plt.grid(axis='y', linestyle='--')
     plt.xticks(fontsize=fontsize)
     plt.yticks(fontsize=fontsize)
     plt.savefig(filename, dpi=300)
