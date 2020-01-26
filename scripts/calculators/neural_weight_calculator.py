@@ -12,6 +12,8 @@ import gc
 class NeuralWeightCalculator():
     __ARTICLES_PER_CHUNK = 1000
     __FILTERS = 64
+    __PREDICT_BATCH_SIZE = 20000
+    __TRAIN_BATCH_SIZE = 64
 
     def __init__(self, data_loader, debug_top_items, workdir, good_bad_ratio, method_id):
         self.__data_loader = data_loader
@@ -176,7 +178,7 @@ class NeuralWeightCalculator():
     def __semi_test_model(self, model, dataset_name, questions, articles_title, articles_content, target):
         predictet_target = model.predict(
             { 'questions': questions, 'articles_title': articles_title, 'articles_content': articles_content },
-            batch_size=64,
+            batch_size=NeuralWeightCalculator.__PREDICT_BATCH_SIZE,
             verbose=0)
         predictet_target = predictet_target.reshape(-1)
         predictet_target = np.where(predictet_target > 0.5, 1.0, 0.0)
@@ -301,7 +303,7 @@ class NeuralWeightCalculator():
             model.fit(
                 { 'questions': self.__train_questions, 'articles_title': self.__train_articles_title, 'articles_content': self.__train_articles_content },
                 { 'weight': self.__train_targets },
-                batch_size = 64,
+                batch_size = NeuralWeightCalculator.__TRAIN_BATCH_SIZE,
                 epochs = epoch,
                 validation_data = (
                     { 'questions': self.__validate_questions, 'articles_title': self.__validate_articles_title, 'articles_content': self.__validate_articles_content },
@@ -319,18 +321,16 @@ class NeuralWeightCalculator():
 
     def __full_test_article(self, method, bypass_model, question_id, question_data, articles_id, articles_data):
         questions_data = np.repeat([question_data], articles_data.shape[0], 0)
-        logging.info(questions_data.shape)
-        logging.info(articles_data.shape)
         articles_weight = bypass_model.predict(
             { 'questions': questions_data, 'articles': articles_data},
-            batch_size=256,
+            batch_size=NeuralWeightCalculator.__PREDICT_BATCH_SIZE,
             verbose=0).reshape(-1)
         ResultsPresenter.present(Question.objects.get(id=question_id), list(articles_id), articles_weight, method, self.__debug_top_items, False)
 
     def __full_test_questions(self, method_name, question_id, articles_id, articles_output, questions_model, bypass_model):
         test_method, created = Method.objects.get_or_create(name=method_name, is_smaller_first=False)
         questions_data = self.__prepare_questions(np.array([question_id]), self.__questions_words)
-        questions_output = questions_model.predict(questions_data, batch_size=64, verbose=0)
+        questions_output = questions_model.predict(questions_data, batch_size=NeuralWeightCalculator.__PREDICT_BATCH_SIZE, verbose=0)
         self.__full_test_article(test_method, bypass_model, question_id, questions_output[0], articles_id, articles_output)
 
     def __prepare_bypass_model(self, model, bypass_model):
@@ -378,7 +378,7 @@ class NeuralWeightCalculator():
             gc.collect()
             articles_title = self.__prepare_articles(articles_id_chunks[i], self.__articles_title_words, True, False)
             articles_content = self.__prepare_articles(articles_id_chunks[i], self.__articles_content_words, False, False)
-            chunk_output = self.__articles_model.predict({ 'articles_title': articles_title, 'articles_content': articles_content }, batch_size=256, verbose=0)
+            chunk_output = self.__articles_model.predict({ 'articles_title': articles_title, 'articles_content': articles_content }, batch_size=NeuralWeightCalculator.__PREDICT_BATCH_SIZE, verbose=0)
             self.__articles_output = np.concatenate((self.__articles_output, chunk_output), axis=0)
             current += 1
             logging.info("progress: %d/%d (%.2f %%)" % (current, chunks, current / chunks * 100))
