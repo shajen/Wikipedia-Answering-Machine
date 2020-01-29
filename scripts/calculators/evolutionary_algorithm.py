@@ -79,7 +79,8 @@ class EvolutionaryAlgorithm():
         if exclude_methods_patterns:
             exclude_methods_patterns = exclude_methods_patterns.split(';')
             for exclude_methods_pattern in exclude_methods_patterns:
-                methods = methods.exclude(name__contains=exclude_methods_pattern)
+                if exclude_methods_pattern:
+                    methods = methods.exclude(name__contains=exclude_methods_pattern)
         methods_id = list(methods.order_by('name').values_list('id', flat=True))
         logging.info(methods_id)
         methods_id_position = {}
@@ -95,7 +96,7 @@ class EvolutionaryAlgorithm():
 
     def __normalise(self, data, method_name):
         max = np.nanmax(data)
-        if max != 0.0:
+        if max != 0.0 and max != np.nan:
             if self.__is_smaller_first(method_name):
                 data /= max
                 data *= -1
@@ -115,6 +116,7 @@ class EvolutionaryAlgorithm():
         answers = Answer.objects.filter(question_id=question_id)
         for method_id in methods_id:
             corrected_articles_position = {}
+            method_index = methods_id_position[method_id]
             for answer in answers:
                 try:
                     corrected_articles_position[answer.article_id] = Solution.objects.get(answer=answer, method_id=method_id).position
@@ -126,7 +128,6 @@ class EvolutionaryAlgorithm():
                     # logging.error('method: %d, question: %d, article: %d' % (method_id, question_id, article_id))
                     continue
                 article_index = articles_id_position[article_id]
-                method_index = methods_id_position[method_id]
                 articles_data[method_index][article_index] = weight
             self.__normalise(articles_data[method_index], methods_id_name[method_id])
         articles_data = np.nan_to_num(articles_data)
