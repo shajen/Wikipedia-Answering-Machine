@@ -38,7 +38,7 @@ class QuestionsParser:
         logging.info('finish')
         return questions_id
 
-    def parse_question(self, question_text, answers):
+    def parse_question(self, question_text, answers, add_new_words=True):
         logging.debug('question:')
         logging.debug(question_text)
         logging.debug('answers:')
@@ -47,11 +47,12 @@ class QuestionsParser:
         if answers:
             try:
                 question, created = Question.objects.get_or_create(name=question_text)
-                words = re.findall('(\d+(?:\.|,)\d+|\w+|\.)', question_text)
-                words_objects = []
-                for word in words:
-                    words_objects.append(Word(value=word))
-                Word.objects.bulk_create(words_objects, ignore_conflicts=True)
+                words = re.findall('(\d+(?:\.|,)\d+|\w+)', question_text)
+                if add_new_words:
+                    words_objects = []
+                    for word in words:
+                        words_objects.append(Word(value=word))
+                    Word.objects.bulk_create(words_objects, ignore_conflicts=True)
 
                 word_value_to_id = {}
                 for word in Word.objects.filter(value__in=words).values('id', 'value'):

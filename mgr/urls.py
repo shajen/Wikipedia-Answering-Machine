@@ -10,6 +10,7 @@ urlpatterns = [
     path('articles/<int:id>/', data.views.article, name='article'),
     path('questions/', data.views.questions, name='questions'),
     path('questions/<int:id>/', data.views.question, name='question'),
+    path('questions/add/', data.views.questions_add, name='questions_add'),
     path('methods/', data.views.methods, name='methods'),
     path('methods/<int:id>/', data.views.method, name='method'),
 ]

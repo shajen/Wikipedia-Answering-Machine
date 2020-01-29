@@ -1,9 +1,14 @@
+from data.forms import *
 from data.models import *
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.paginator import Paginator
 from django.http import HttpResponse, Http404
+from django.shortcuts import redirect
 from django.shortcuts import render
 from django.template import loader
+from scripts.upload_questions import update_questions_words
+import os
+import scripts.tools.questions_parser
 
 __OBJECTS_PER_PAGE = 10000
 
@@ -24,6 +29,24 @@ def articles(request):
     objects_per_page = request.GET.get('objects_per_page', __OBJECTS_PER_PAGE)
     paginator = Paginator(Article.objects.filter(redirected_to=None, content_words_count__gte=1, title_words_count__gte=1).order_by(order_by).all(), objects_per_page)
     return render(request, 'data/articles.html', {'objects': paginator.get_page(page), 'total_count': paginator.count, 'order_by' : order_by })
+
+def questions_add(request):
+    if request.method == 'POST':
+        form = QuestionForm(request.POST)
+        if form.is_valid():
+            questions = form.cleaned_data['questions'].strip().lower().split('\n')
+            questionsParser = scripts.tools.questions_parser.QuestionsParser(200)
+            questions_id = list(map(lambda question: questionsParser.parse_question(question.strip(), ['awk'], False), questions))
+            if questions_id:
+                update_questions_words(Question.objects.filter(id__in=questions_id))
+                try:
+                    os.remove('/dev/shm/questions_base_words')
+                    os.remove('/dev/shm/questions_id')
+                except:
+                    pass
+        return redirect('questions')
+    else:
+        return render(request, 'data/questions_add.html')
 
 def question(request, id):
     try:

@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+
+{% block title %}
+Questions add
+{% endblock %}
+
+{% block content %}
+<div>
+  <h3>Questions add<h3>
+</div>
+<div>
+  <form action="{% url 'questions_add' %}" method="post">
+      {% csrf_token %}
+      <div class="form-group">
+        <label for="questions">New questions:</label>
+        <textarea class="form-control" id="questions" name="questions" rows="10"></textarea>
+      </div>
+      <button type="submit" class="btn btn-primary">Add</button>
+  </form>
+</div>
+{% endblock %}
