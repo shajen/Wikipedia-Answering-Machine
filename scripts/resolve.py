@@ -183,7 +183,7 @@ def run(*args):
     parser.add_argument("-N", "--neighbors", help="count tf-idf in every n neighboring words tuple in articles", type=str, default='0', metavar="0,10,20")
     parser.add_argument("-mwiw", "--minimal_word_idf_weights", help="use only words with idf weight above", type=str, default='0.0', metavar="0.0,1.6,3.2")
     parser.add_argument("-pf", "--power_factors", help="use to sum words weight in count article weight", type=str, default='3', metavar="1,2,3,4")
-    parser.add_argument("-cm_qwc", "--classic_model_questions_words_count", help="use first n words from questions", type=int, default=100)
+    parser.add_argument("-cm_qwc", "--classic_model_questions_words_count", help="use last n words from questions", type=int, default=100)
     parser.add_argument("-cm_atwc", "--classic_model_articles_title_words_count", help="use first n words from articles title", type=int, default=100)
     parser.add_argument("-cm_acwc", "--classic_model_articles_content_words_count", help="use first n words from articles", type=int, default=1000)
 
@@ -212,5 +212,5 @@ def run(*args):
     for arg in vars(args):
         logging.info("%s: %s" % (arg.ljust(50), getattr(args, arg)))
 
-    questions = list(Question.objects.order_by('id').all())[:args.questions]
+    questions = list(Question.objects.order_by('id').all())[args.questions:]
     start(args, questions, get_method_name(args))
