@@ -8,12 +8,16 @@ import os
 import tensorflow as tf
 import re
 import gc
+import datetime
 
 class NeuralWeightCalculator():
     __ARTICLES_PER_CHUNK = 1000
-    __FILTERS = 64
+    __FIRST_LAYER_FILTERS = 4
+    __FILTERS = 32
+    __WORDS_WINDOWS = [2,3]
+    __DENSE_LAYERS = [10]
     __PREDICT_BATCH_SIZE = 20000
-    __TRAIN_BATCH_SIZE = 64
+    __TRAIN_BATCH_SIZE = 256
 
     def __init__(self, data_loader, debug_top_items, workdir, good_bad_ratio, method_id):
         self.__data_loader = data_loader
@@ -88,7 +92,8 @@ class NeuralWeightCalculator():
                 corrected_articles_id = Answer.objects.filter(question_id=question_id).values_list('article_id', flat=True)
                 count = self.__good_bad_ratio * len(corrected_articles_id)
                 order_by = 'weight' if is_smaller_first else '-weight'
-                articles_id.extend(Rate.objects.filter(method_id=self.__method_id, question_id=question_id).exclude(article_id__in=corrected_articles_id).order_by(order_by)[:count].values_list('article_id', flat=True))
+                offset = 5
+                articles_id.extend(Rate.objects.filter(method_id=self.__method_id, question_id=question_id).exclude(article_id__in=corrected_articles_id).order_by(order_by)[offset:offset+count].values_list('article_id', flat=True))
             return articles_id
 
     def __generate_dataset_with_questions(self, questions, dataset_name):
@@ -199,44 +204,43 @@ class NeuralWeightCalculator():
             self.__simple_test_model(model, dataset, self.__test_questions, self.__test_articles_title, self.__test_articles_content, self.__test_targets)
             # self.__semi_test_model(model, dataset, self.__test_questions, self.__test_articles_title, self.__test_articles_content, self.__test_targets)
 
-    def _words_layers(self, filters, input):
-        blocks = []
-        input = tf.keras.layers.Conv1D(filters, 1, activation='relu')(input)
-        for i in [2, 3]:
-            block = tf.keras.layers.Conv1D(filters, i, activation='relu')(input)
-            block = tf.keras.layers.GlobalMaxPooling1D()(block)
-            blocks.append(block)
-        block = tf.keras.layers.concatenate(blocks)
-        return block
-        block = tf.keras.layers.Reshape((4, filters))(block)
-        block = tf.keras.layers.Conv1D(filters, 2, activation='relu')(block)
-        block = tf.keras.layers.GlobalMaxPooling1D()(block)
-
-    def __create_questions_model(self, filters):
-        input = tf.keras.Input(shape=(self.__questions_words, self._word2vec_size), name='questions')
-        block = self._words_layers(filters, input)
-        return tf.keras.Model(input, block, name='questions_model')
-
-    def __create_articles_model(self, filters):
-        title_input = tf.keras.Input(shape=(self.__articles_title_words, self._word2vec_size), name='articles_title')
-        title_block = self._words_layers(filters, title_input)
-
-        content_input = tf.keras.Input(shape=(self.__articles_content_words, self._word2vec_size), name='articles_content')
-        content_block = self._words_layers(filters, content_input)
-
-        articles_block = tf.keras.layers.concatenate([title_block, content_block], name='articles_output')
-        return tf.keras.Model([title_input, content_input], articles_block, name='articles_model')
+    def _words_layers(self, filters, inputs):
+        layer = tf.keras.layers.Conv1D(NeuralWeightCalculator.__FIRST_LAYER_FILTERS, 1, activation='relu')
+        inputs = [layer(block) for block in inputs]
+        layers = []
+        for i in NeuralWeightCalculator.__WORDS_WINDOWS:
+            layer = tf.keras.layers.Conv1D(filters, i, activation='relu')
+            blocks = [layer(block) for block in inputs]
+            layer = tf.keras.layers.GlobalMaxPooling1D()
+            blocks = [layer(block) for block in blocks]
+            layers.append(blocks)
+        if len(layers) == 1:
+            return layers[0]
+        else:
+            blocks = []
+            for i in range(len(inputs)):
+                blocks.append(tf.keras.layers.concatenate([layer[i] for layer in layers]))
+            logging.info(blocks)
+            return blocks
 
     def _weight_layers(self, x):
-        x = tf.keras.layers.Dense(32, activation='sigmoid')(x)
-        x = tf.keras.layers.Dense(16, activation='sigmoid')(x)
+        for d in NeuralWeightCalculator.__DENSE_LAYERS:
+            x = tf.keras.layers.Dense(d, activation='sigmoid')(x)
         x = tf.keras.layers.Dense(1, activation='sigmoid', name='weight')(x)
         return x
 
     def __create_distances_model(self, filters, bypass_models):
-        questions_model = self.__create_questions_model(filters)
-        articles_model = self.__create_articles_model(filters)
+        question_input = tf.keras.Input(shape=(self.__questions_words, self._word2vec_size), name='questions')
+        title_input = tf.keras.Input(shape=(self.__articles_title_words, self._word2vec_size), name='articles_title')
+        content_input = tf.keras.Input(shape=(self.__articles_content_words, self._word2vec_size), name='articles_content')
 
+        blocks = self._words_layers(NeuralWeightCalculator.__FILTERS, [question_input, title_input, content_input])
+        questions_model = tf.keras.Model(question_input, blocks[0], name='questions_model')
+        articles_block = tf.keras.layers.concatenate(blocks[1:], name='articles_output')
+        articles_model = tf.keras.Model([title_input, content_input], articles_block, name='articles_model')
+
+        questions_model.summary(print_fn=lambda x: logging.info(x))
+        articles_model.summary(print_fn=lambda x: logging.info(x))
         if not bypass_models:
             questions_input = tf.keras.Input(shape=(self.__questions_words, self._word2vec_size), name='questions')
             articles_title_input = tf.keras.Input(shape=(self.__articles_title_words, self._word2vec_size), name='articles_title')
@@ -252,6 +256,7 @@ class NeuralWeightCalculator():
 
     def __create_model(self):
         model = self.__create_distances_model(NeuralWeightCalculator.__FILTERS, False)
+        model.summary(print_fn=lambda x: logging.info(x))
         tf.keras.utils.plot_model(model, '%s/%s.png' % (self.__workdir, self.model_name()), show_shapes=True, expand_nested=True)
         return model
 
@@ -259,7 +264,7 @@ class NeuralWeightCalculator():
         return 'cnn_model'
 
     def __load_model(self):
-        models_files = [f for f in os.listdir(self.__workdir) if re.match(r'%s_.*.h5' % self.model_name(), f)]
+        models_files = [f for f in os.listdir(self.__workdir) if re.match(r'%s_.*' % self.model_name(), f)]
         best_model_file = sorted(models_files)[-1]
         logging.info('loading model from file: %s' % best_model_file)
         model = tf.keras.models.load_model('%s/%s' % (self.__workdir, best_model_file))
@@ -291,8 +296,10 @@ class NeuralWeightCalculator():
             except:
                 pass
 
-        save_callback = tf.keras.callbacks.ModelCheckpoint(filepath='%s/%s_{val_accuracy:.4f}.h5' % (self.__workdir, self.model_name()), save_best_only=True, monitor='val_accuracy', verbose=0)
+        save_callback = tf.keras.callbacks.ModelCheckpoint(filepath='%s/%s_{val_accuracy:.4f}' % (self.__workdir, self.model_name()), save_best_only=True, monitor='val_accuracy', verbose=0)
         test_callback = tf.keras.callbacks.LambdaCallback(on_epoch_end=on_epoch_end)
+        log_dir = "%s/logs/%s" % (self.__workdir, datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
+        tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
 
         model.compile(
             optimizer = tf.keras.optimizers.RMSprop(1e-3),
@@ -310,7 +317,7 @@ class NeuralWeightCalculator():
                     { 'weight': self.__validate_targets }
                 ),
                 verbose = 0,
-                callbacks=[save_callback, test_callback])
+                callbacks=[save_callback, test_callback, tensorboard_callback])
         except KeyboardInterrupt:
             logging.info('learing stoppped by user')
 
